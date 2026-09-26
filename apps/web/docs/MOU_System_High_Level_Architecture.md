@@ -291,7 +291,7 @@ flowchart TB
   `recurring_invoices.payload`, reusing the cron container.
 - **End-customer online payments**: Stripe Checkout/Payment Links per invoice;
   reconcile via webhook into `payments`.
-- **Object storage** (Vercel Blob/S3) for logos and stored PDFs (`documents.pdfUrl`).
+- **Object storage** (Cloudflare R2): public bucket for logos, private bucket for archived PDFs (`documents.pdfKey`).
 - **Reporting service**: materialized views or a reporting read-model for the
   Business plan.
 - **Observability**: structured logs + error tracking (Sentry) + uptime checks.

@@ -15,6 +15,20 @@
       "when": 1781274325701,
       "tag": "0001_smooth_captain_marvel",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790461937421,
+      "tag": "0002_add_pdf_key",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790461940896,
+      "tag": "0003_drop_pdf_url",
+      "breakpoints": true
     }
   ]
 }

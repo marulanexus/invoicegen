@@ -17,6 +17,8 @@
     "db:seed": "tsx src/server/db/seed.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1141.0",
+    "@aws-sdk/s3-request-presigner": "^3.1141.0",
     "@clerk/nextjs": "^7.5.2",
     "@hookform/resolvers": "^5.4.0",
     "@invoicegen/shared": "*",
@@ -35,7 +37,6 @@
     "@radix-ui/react-tooltip": "^1.2.9",
     "@react-pdf/renderer": "^4.5.1",
     "@stripe/stripe-js": "^9.8.0",
-    "@vercel/blob": "^2.4.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",

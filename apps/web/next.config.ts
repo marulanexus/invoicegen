@@ -8,7 +8,7 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "img.clerk.com" },
       { protocol: "https", hostname: "images.clerk.dev" },
       // Allow logos/assets served from common object stores.
-      { protocol: "https", hostname: "**.public.blob.vercel-storage.com" },
+      { protocol: "https", hostname: "**.r2.dev" },
       { protocol: "https", hostname: "**.amazonaws.com" },
     ],
   },

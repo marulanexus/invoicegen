@@ -82,11 +82,11 @@ The public marketing site renders even before keys are added.
 
 > 📑 **New here? Follow the [Environment Setup guide](./docs/environment-setup.md)** —
 > a step-by-step walkthrough for getting every key from Neon, Clerk, Stripe,
-> Resend, Vercel Blob and Cron, for both local dev and production.
+> Resend, Cloudflare R2 and Cron, for both local dev and production.
 
 ### 3. Create the schema
 ```bash
-npm run db:push      # push the Drizzle schema to Neon (or: db:generate + db:migrate)
+npm run db:migrate   # apply SQL migrations in drizzle/ (never mix with db:push)
 npm run db:seed      # optional: demo org with sample clients & documents
 npm run db:studio    # optional: browse data in Drizzle Studio
 ```
@@ -133,7 +133,7 @@ Map `STRIPE_PRICE_GROWTH` / `STRIPE_PRICE_BUSINESS` to monthly recurring Prices 
 1. Push to GitHub and import the repo into Vercel.
 2. Add all env vars from `.env.example`.
 3. Set the Stripe webhook endpoint to `https://<your-app>/api/webhooks/stripe`.
-4. Run `npm run db:push` against your production database once.
+4. Run `npm run db:migrate` against your production database (on every schema change).
 5. Deploy. The cron in `vercel.json` is registered automatically.
 
 ## Scripts
@@ -143,7 +143,7 @@ Map `STRIPE_PRICE_GROWTH` / `STRIPE_PRICE_BUSINESS` to monthly recurring Prices 
 | `dev` / `build` / `start` | Next.js dev / production build / serve |
 | `typecheck` | `tsc --noEmit` |
 | `test` / `test:watch` | Run the Vitest unit suite |
-| `db:push` | Sync Drizzle schema to the database |
+| `db:push` | Throwaway/local databases only — skips migration history |
 | `db:generate` / `db:migrate` | Generate & apply SQL migrations |
 | `db:studio` | Open Drizzle Studio |
 | `db:seed` | Seed demo data |

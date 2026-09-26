@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 
 import { requireOrgContext } from "@/server/auth/context";
-import { uploadFile } from "@/server/storage";
-import { isBlobConfigured } from "@/lib/env";
+import { uploadPublicFile } from "@/server/storage";
+import { isPublicStorageConfigured } from "@/lib/env";
 import { rateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
@@ -23,9 +23,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Too many uploads. Please wait." }, { status: 429 });
   }
 
-  if (!isBlobConfigured) {
+  if (!isPublicStorageConfigured) {
     return NextResponse.json(
-      { error: "File uploads are not configured. Add BLOB_READ_WRITE_TOKEN, or paste a logo URL instead." },
+      { error: "File uploads are not configured. Add the R2 storage settings, or paste a logo URL instead." },
       { status: 400 }
     );
   }
@@ -44,7 +44,12 @@ export async function POST(req: Request) {
 
   const buffer = Buffer.from(await file.arrayBuffer());
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-  const url = await uploadFile(`logos/${ctx.org.id}/${safeName}`, buffer, file.type);
+  // Random prefix: unique, unguessable keys, so a new logo never collides with an old one.
+  const url = await uploadPublicFile(
+    `logos/${ctx.org.id}/${crypto.randomUUID()}-${safeName}`,
+    buffer,
+    file.type
+  );
 
   if (!url) {
     return NextResponse.json({ error: "Upload failed." }, { status: 500 });

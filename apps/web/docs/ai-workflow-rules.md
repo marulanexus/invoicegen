@@ -30,7 +30,7 @@
 
 | You want to… | Put it in… |
 | --- | --- |
-| Add a DB table/column | `src/server/db/schema.ts` → run `npm run db:generate` |
+| Add a DB table/column | `src/server/db/schema.ts` → `npm run db:generate` → `npm run db:migrate` (never `db:push` on shared DBs) |
 | Read data for a page | `src/server/<domain>/queries.ts` (marked `import "server-only"`) |
 | Mutate data | `src/server/<domain>/actions.ts` (`"use server"`) |
 | Reusable pure logic | `src/lib/*` (no DB, no `server-only`) |

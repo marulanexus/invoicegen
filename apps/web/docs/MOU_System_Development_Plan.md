@@ -183,7 +183,7 @@ payment→status transitions, PDF/preview parity.
 
 1. Provision Neon, Clerk, (optional) Stripe & Resend; collect keys.
 2. Configure Vercel project env vars from `.env.example`.
-3. `npm run db:push` against production DB (one-time / on schema change).
+3. `npm run db:migrate` against production DB (on every schema change).
 4. Set Stripe webhook endpoint to `/api/webhooks/stripe`; set `CRON_SECRET`.
 5. Deploy via Vercel; cron auto-registers from `vercel.json`.
 6. Smoke test: sign up → onboarding → create & send invoice → record payment.

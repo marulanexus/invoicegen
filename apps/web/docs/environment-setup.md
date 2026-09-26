@@ -16,7 +16,7 @@ does, where to get it, and where to paste it — for both **local development** 
 | --- | --- | --- |
 | **Required to use the app** | `DATABASE_URL`, `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY` | You can browse the marketing site, but can't sign in or store data |
 | **Required for production** | `APP_ENCRYPTION_KEY` | App throws on boot in production (dev uses a fallback key) |
-| **Optional integrations** | Stripe, Resend, Vercel Blob, Cron, Google | Those features show a "not configured" notice and the rest keeps working |
+| **Optional integrations** | Stripe, Resend, Cloudflare R2, Cron, Google | Those features show a "not configured" notice and the rest keeps working |
 
 ---
 
@@ -90,7 +90,7 @@ DATABASE_URL=postgresql://user:password@ep-xxx-pooler.region.aws.neon.tech/neond
 6. Create the database tables (run once, and again whenever the schema changes):
 
 ```powershell
-npm run db:push        # pushes the Drizzle schema to Neon
+npm run db:migrate     # applies the SQL migrations in drizzle/ to Neon
 # optional:
 npm run db:seed        # inserts demo data for exploring
 npm run db:studio      # opens a visual DB browser
@@ -209,20 +209,38 @@ EMAIL_FROM=InvoiceGen <invoices@yourdomain.com>
 
 ---
 
-## 7. File storage — Vercel Blob (OPTIONAL: logo upload & PDF archiving)
+## 7. File storage — Cloudflare R2 (OPTIONAL: logo upload & PDF archiving)
 
 Without this, you can still paste a logo **URL**, and PDFs are generated on
-demand (just not stored).
+demand (just not archived).
 
-1. In your **Vercel** project, go to **Storage → Create → Blob**.
-2. Create a store and copy its **Read/Write token**.
-3. Add to env:
+InvoiceGen uses **two buckets**: a **public** one for logos (they appear on
+PDFs and public invoice links) and a **private** one for archived invoice PDFs,
+which contain client personal information and must never be public.
+
+1. In the Cloudflare dashboard open **R2 Object Storage** and create two
+   buckets, e.g. `invoicegen-public` and `invoicegen-private`.
+2. Open the **public** bucket → **Settings → Public access**:
+   - Production: connect a **custom domain** (e.g. `assets.yourdomain.co.za`).
+   - Local dev: you can enable the **r2.dev** subdomain instead (rate-limited,
+     not for production).
+   Leave public access **off** on the private bucket.
+3. In R2 → **Manage API tokens** → **Create API token** with **Object Read &
+   Write**, scoped to just these two buckets. Copy the **Access Key ID** and
+   **Secret Access Key** (shown once). Your **Account ID** is on the R2 overview
+   page.
+4. Add to env:
 
 ```
-BLOB_READ_WRITE_TOKEN=vercel_blob_rw_xxxxxxxx
+R2_ACCOUNT_ID=your_account_id
+R2_ACCESS_KEY_ID=xxxxxxxx
+R2_SECRET_ACCESS_KEY=xxxxxxxx
+R2_PUBLIC_BUCKET=invoicegen-public
+R2_PUBLIC_URL=https://assets.yourdomain.co.za
+R2_PRIVATE_BUCKET=invoicegen-private
 ```
 
-On Vercel, linking the Blob store to your project sets this automatically.
+Use separate buckets (and tokens) for development and production.
 
 ---
 
@@ -272,7 +290,7 @@ GOOGLE_CLIENT_SECRET=
    Neon branch, your real domain in `NEXT_PUBLIC_APP_URL`).
 3. Add `APP_ENCRYPTION_KEY` (required in production) and `CRON_SECRET`.
 4. Point the Stripe webhook at `https://your-domain.com/api/webhooks/stripe`.
-5. Run `npm run db:push` against the production database once.
+5. Run `npm run db:migrate` against the production database (on every schema change).
 6. Deploy. The cron in `vercel.json` registers automatically.
 
 > Set variables for the correct **Environments** (Production / Preview /
@@ -298,7 +316,9 @@ GOOGLE_CLIENT_SECRET=
 | `STRIPE_PRICE_BUSINESS` | Optional | Stripe | Business plan price |
 | `RESEND_API_KEY` | Optional | Resend | Platform email |
 | `EMAIL_FROM` | Optional | You (verified domain) | Sender address |
-| `BLOB_READ_WRITE_TOKEN` | Optional | Vercel Blob | Logo upload, PDF storage |
+| `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | Optional | Cloudflare R2 | Storage credentials |
+| `R2_PUBLIC_BUCKET`, `R2_PUBLIC_URL` | Optional | Cloudflare R2 | Logo uploads (public) |
+| `R2_PRIVATE_BUCKET` | Optional | Cloudflare R2 | Archived PDFs (private) |
 | `CRON_SECRET` | Optional | `node` command | Protect cron job |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Optional | Google Cloud | Future calendar sync |
 

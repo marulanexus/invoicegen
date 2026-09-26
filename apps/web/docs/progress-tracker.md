@@ -110,7 +110,7 @@ typecheck all green, and audited by a supervisor review agent (findings fixed).
 | Dashboard reminders widget + chart toggle | ✅ | upcoming/overdue card + monthly/quarterly toggle |
 | Clients archived filter UI | ✅ | Active/Archived/All chips |
 | Custom default template config | ✅ | `business_profiles.defaultTemplateKey` + settings picker |
-| Logo upload + PDF storage | ✅ | Vercel Blob (graceful no-op when unconfigured) |
+| Logo upload + PDF storage | ✅ | Cloudflare R2: public bucket (logos), private bucket (PDFs); graceful no-op when unconfigured |
 | Rate limiting | ✅ | `src/lib/rate-limit.ts` on send/upload/public-PDF |
 | Team invite/remove | ✅ | Clerk `OrganizationSwitcher` (manage modal) on Business plan |
 | Advanced reporting (Business) | ✅ | `/reports`: revenue by client/status, A/R aging |

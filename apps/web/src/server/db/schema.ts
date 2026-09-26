@@ -269,7 +269,8 @@ export const documents = pgTable(
     notes: text("notes"),
     terms: text("terms"),
 
-    pdfUrl: text("pdf_url"),
+    /** R2 key of the last sent PDF, in the private bucket (never a public URL). */
+    pdfKey: text("pdf_key"),
     publicToken: text("public_token"), // for shareable view links
 
     sentAt: timestamp("sent_at", { withTimezone: true }),

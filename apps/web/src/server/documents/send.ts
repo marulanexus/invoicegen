@@ -20,7 +20,7 @@ import {
 import { getEmailTemplate } from "@/server/email/template-store";
 import { incrementUsage } from "@/server/billing/usage";
 import { logActivity } from "@/server/activity";
-import { uploadFile } from "@/server/storage";
+import { uploadPrivateFile } from "@/server/storage";
 import { viewFromStored } from "@/lib/document-view";
 import { rateLimit } from "@/lib/rate-limit";
 
@@ -108,17 +108,18 @@ export async function sendDocument(
 
   await incrementUsage(ctx.org.id, "emailsSent");
 
-  // Best-effort: archive the sent PDF to blob storage when configured.
+  // Best-effort: archive the sent PDF to private storage when configured.
+  // One object per send, so an edited-and-resent document keeps each version.
   try {
-    const stored = await uploadFile(
-      `pdfs/${ctx.org.id}/${full.document.number}.pdf`,
+    const key = await uploadPrivateFile(
+      `pdfs/${ctx.org.id}/${id}/${Date.now()}.pdf`,
       pdf,
       "application/pdf"
     );
-    if (stored) {
+    if (key) {
       await db
         .update(documents)
-        .set({ pdfUrl: stored })
+        .set({ pdfKey: key })
         .where(and(eq(documents.id, id), eq(documents.orgId, ctx.org.id)));
     }
   } catch (err) {

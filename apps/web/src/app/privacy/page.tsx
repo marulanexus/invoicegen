@@ -112,7 +112,7 @@ export default function PrivacyPage() {
           configured) — to send documents and notifications.
         </li>
         <li>
-          <strong>File storage</strong> (where configured) — to store logos and
+          <strong>File storage</strong> (Cloudflare R2) — to store logos and
           generated PDFs.
         </li>
       </ul>
