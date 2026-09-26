@@ -1,0 +1,25 @@
+{
+  "name": "invoicegen",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev -w @invoicegen/web",
+    "dev:mobile": "npm run start -w @invoicegen/mobile",
+    "build:web": "npm run build -w @invoicegen/web",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present"
+  },
+  "overrides": {
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "@types/react": "~19.2.2",
+    "@types/react-dom": "~19.2.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -1,0 +1,15 @@
+# Dependencies (single install at the repo root)
+node_modules/
+
+# Env files: never commit secrets
+.env
+.env*.local
+
+# Build / tool output
+.turbo/
+*.tsbuildinfo
+coverage/
+
+# OS / editor
+.DS_Store
+Thumbs.db

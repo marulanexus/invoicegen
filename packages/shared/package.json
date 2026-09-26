@@ -1,0 +1,19 @@
+{
+  "name": "@invoicegen/shared",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Pure TypeScript shared by the web and mobile apps (money, document math). No DB, no server-only, no React.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./money": "./src/money.ts",
+    "./calc": "./src/calc.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "^5",
+    "vitest": "^4.1.8"
+  }
+}
