@@ -50,7 +50,7 @@ describe("withApiAuth", () => {
   it("turns unexpected errors into a 500 without leaking details", async () => {
     vi.mocked(getOrgContext).mockResolvedValue(ctx);
     vi.spyOn(console, "error").mockImplementation(() => {});
-    const res = await withApiAuth(async () => {
+    const res = await withApiAuth<{ id: string }>(async () => {
       throw new Error("connection string postgres://secret");
     })(request({ authorization: "Bearer good" }), route);
     expect(res.status).toBe(500);

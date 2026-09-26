@@ -77,7 +77,11 @@ export async function getDocument(
 
   const [client, items, pays] = await Promise.all([
     doc.clientId
-      ? db.select().from(clients).where(eq(clients.id, doc.clientId)).limit(1)
+      ? db
+          .select()
+          .from(clients)
+          .where(and(eq(clients.id, doc.clientId), eq(clients.orgId, orgId)))
+          .limit(1)
       : Promise.resolve([]),
     db
       .select()

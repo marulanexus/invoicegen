@@ -7,7 +7,15 @@ import type { ZodError } from "zod";
  * `/api/v1` route handlers (mobile). They never throw for expected failures;
  * each caller maps the result to its own shape (ActionResult or HTTP status).
  */
-export type ServiceErrorCode = "validation" | "not_found" | "plan_limit";
+export type ServiceErrorCode =
+  | "validation"
+  | "not_found"
+  | "plan_limit"
+  /** The action isn't allowed in the resource's current state. */
+  | "conflict"
+  | "rate_limited"
+  /** An outside service (e.g. email delivery) failed. */
+  | "upstream";
 
 export type ServiceResult<T> =
   | { ok: true; data: T }

@@ -24,6 +24,9 @@ const STATUS: Record<ServiceErrorCode, number> = {
   validation: 422,
   not_found: 404,
   plan_limit: 403,
+  conflict: 409,
+  rate_limited: 429,
+  upstream: 502,
 };
 
 export function apiData<T>(data: T, status = 200): Response {

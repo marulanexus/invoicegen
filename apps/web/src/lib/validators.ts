@@ -93,13 +93,25 @@ export const lineItemSchema = z.object({
   taxRate: z.coerce.number().min(0).max(100).default(0),
 });
 
+/** A real calendar date as `YYYY-MM-DD` (rejects e.g. 2026-02-31). */
+const isoDate = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Use the format YYYY-MM-DD")
+  .refine((v) => {
+    const d = new Date(`${v}T00:00:00Z`);
+    return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
+  }, "Enter a valid date");
+
+/** Optional date: empty string and null both mean "not set". */
+const optionalIsoDate = isoDate.or(z.literal("")).nullable().optional();
+
 export const documentSchema = z.object({
   type: z.enum(["invoice", "quote", "receipt"]),
   clientId: z.string().uuid().nullable().optional(),
   currency: z.string().trim().length(3).default("USD"),
-  issueDate: z.string().min(1),
-  dueDate: z.string().optional().nullable(),
-  validUntil: z.string().optional().nullable(),
+  issueDate: isoDate,
+  dueDate: optionalIsoDate,
+  validUntil: optionalIsoDate,
   poNumber: optionalString,
   templateKey: z.string().default("classic"),
   accentColor: z.string().optional().default("#2563eb"),
