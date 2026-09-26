@@ -22,6 +22,7 @@ import { toMoneyString } from "@/lib/money";
 import { env } from "@/lib/env";
 import { documentSchema, type DocumentInput, type LineItemInput } from "@/lib/validators";
 import { addDays, statusActionBlocked, type StatusAction } from "@/server/documents/rules";
+import { settleBalanceInTx } from "@/server/payments/service";
 
 export { STATUS_ACTIONS, withProfileDefaults, type StatusAction } from "@/server/documents/rules";
 
@@ -208,54 +209,61 @@ export async function changeDocumentStatusForOrg(
   id: string,
   action: StatusAction
 ): Promise<ServiceResult<Document>> {
-  const [doc] = await db
-    .select()
-    .from(documents)
-    .where(and(eq(documents.id, id), eq(documents.orgId, ctx.org.id)))
-    .limit(1);
-  if (!doc) return fail("not_found", "Document not found.");
+  // Lock the row so the check and the change see the same state (a payment
+  // being recorded concurrently waits instead of racing "Mark as paid").
+  const result = await db.transaction(async (tx) => {
+    const [doc] = await tx
+      .select()
+      .from(documents)
+      .where(and(eq(documents.id, id), eq(documents.orgId, ctx.org.id)))
+      .limit(1)
+      .for("update");
+    if (!doc) return fail("not_found", "Document not found.");
 
-  const blocked = statusActionBlocked(doc, action);
-  if (blocked) return fail("conflict", blocked);
+    const blocked = statusActionBlocked(doc, action);
+    if (blocked) return fail("conflict", blocked);
 
-  const patch: Partial<typeof documents.$inferInsert> = { updatedAt: new Date() };
-  switch (action) {
-    case "send":
-      patch.status = "sent";
-      patch.sentAt = new Date();
-      break;
-    case "mark_paid":
-      patch.status = "paid";
-      patch.amountPaid = doc.total;
-      patch.paidAt = new Date();
-      break;
-    case "void":
-      patch.status = "void";
-      break;
-    case "accept":
-      patch.status = "accepted";
-      break;
-    case "decline":
-      patch.status = "declined";
-      break;
-    case "reopen":
-      patch.status = "draft";
-      patch.paidAt = null;
-      break;
-  }
+    // Record the outstanding balance as a payment so revenue and the
+    // payments list agree with the invoice status.
+    if (action === "mark_paid") return ok(await settleBalanceInTx(tx, ctx, doc));
 
-  const [row] = await db.update(documents).set(patch).where(eq(documents.id, id)).returning();
+    const patch: Partial<typeof documents.$inferInsert> = { updatedAt: new Date() };
+    switch (action) {
+      case "send":
+        patch.status = "sent";
+        patch.sentAt = new Date();
+        break;
+      case "void":
+        patch.status = "void";
+        break;
+      case "accept":
+        patch.status = "accepted";
+        break;
+      case "decline":
+        patch.status = "declined";
+        break;
+      case "reopen":
+        patch.status = "draft";
+        patch.paidAt = null;
+        break;
+    }
+
+    const [row] = await tx.update(documents).set(patch).where(eq(documents.id, id)).returning();
+    return ok(row);
+  });
+
+  if (!result.ok) return result;
 
   await logActivity({
     orgId: ctx.org.id,
     actorMemberId: ctx.member.id,
-    action: `${doc.type}.${action}`,
+    action: `${result.data.type}.${action}`,
     entityType: "document",
     entityId: id,
-    description: `${doc.number} → ${patch.status}`,
+    description: `${result.data.number} → ${result.data.status}`,
   });
 
-  return ok(row);
+  return result;
 }
 
 export async function deleteDocumentForOrg(
