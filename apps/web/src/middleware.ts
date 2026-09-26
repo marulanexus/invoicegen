@@ -18,8 +18,15 @@ const isPublicRoute = createRouteMatcher([
   "/p/(.*)", // public shareable document view
 ]);
 
+/**
+ * Mobile JSON API. Clerk still parses the bearer token here, but each route
+ * enforces auth itself (`withApiAuth`) so clients get a JSON 401 instead of
+ * the 404 that `auth.protect()` returns for non-page requests.
+ */
+const isMobileApiRoute = createRouteMatcher(["/api/v1(.*)"]);
+
 const clerk = clerkMiddleware(async (auth, req) => {
-  if (!isPublicRoute(req)) {
+  if (!isPublicRoute(req) && !isMobileApiRoute(req)) {
     await auth.protect();
   }
 });
