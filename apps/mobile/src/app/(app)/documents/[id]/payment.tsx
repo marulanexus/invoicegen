@@ -1,26 +1,32 @@
 import type { PaymentMethod } from '@invoicegen/shared/api';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { View } from 'react-native';
 
-import { Button, Chip, ErrorView, Field, KeyValue, Loading, Screen, Section, T } from '@/components/ui';
+import { Badge, Button, Chip, ErrorView, Field, KeyValue, Loading, Screen, Section, T } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { ApiError } from '@/lib/api';
 import { balanceOf, formatCurrency, PAYMENT_METHOD, todayIso } from '@/lib/format';
-import { useDocument, useRecordPayment } from '@/lib/queries';
+import { useDocument, useRecordPayment, useReviewProof } from '@/lib/queries';
 
 const METHODS: PaymentMethod[] = ['bank_transfer', 'cash', 'card', 'other'];
 
+/**
+ * Record a payment. Opened with `?proofId=` (plus the proof's amount, date and
+ * reference), it accepts that proof instead, so the payment is linked to it.
+ */
 export default function RecordPaymentScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const params = useLocalSearchParams<{ id: string; proofId?: string; amount?: string; paidOn?: string; reference?: string }>();
+  const { id, proofId } = params;
   const doc = useDocument(id);
   const record = useRecordPayment(id);
+  const accept = useReviewProof(id);
 
   const balance = doc.data ? balanceOf(doc.data.document) : 0;
   const [amount, setAmount] = useState<string | null>(null);
   const [method, setMethod] = useState<PaymentMethod>('bank_transfer');
-  const [paidAt, setPaidAt] = useState(todayIso());
-  const [reference, setReference] = useState('');
+  const [paidAt, setPaidAt] = useState(params.paidOn || todayIso());
+  const [reference, setReference] = useState(params.reference ?? '');
 
   if (doc.isPending) return <Loading />;
   if (doc.isError) {
@@ -32,15 +38,20 @@ export default function RecordPaymentScreen() {
   }
 
   const d = doc.data.document;
-  const amountText = amount ?? balance.toFixed(2);
+  // Default to what the proof says, but never more than is owed.
+  const suggested = params.amount ? Math.min(Number(params.amount), balance) : balance;
+  const amountText = amount ?? suggested.toFixed(2);
   const parsedAmount = Number(amountText.replace(',', '.'));
-  const fieldErrors = record.error instanceof ApiError ? record.error.fieldErrors : undefined;
+  const mutation = proofId ? accept : record;
+  const fieldErrors = mutation.error instanceof ApiError ? mutation.error.fieldErrors : undefined;
 
   function submit() {
-    record.mutate(
-      { documentId: id, amount: parsedAmount, method, paidAt, reference: reference.trim() || undefined },
-      { onSuccess: () => router.back() }
-    );
+    const common = { amount: parsedAmount, method, paidAt, reference: reference.trim() || undefined };
+    if (proofId) {
+      accept.mutate({ id: proofId, action: 'accept', ...common }, { onSuccess: () => router.back() });
+    } else {
+      record.mutate({ documentId: id, ...common }, { onSuccess: () => router.back() });
+    }
   }
 
   return (
@@ -49,13 +60,22 @@ export default function RecordPaymentScreen() {
         <Button
           label={`Record ${Number.isFinite(parsedAmount) && parsedAmount > 0 ? formatCurrency(parsedAmount, d.currency) : 'payment'}`}
           onPress={submit}
-          loading={record.isPending}
+          loading={mutation.isPending}
           disabled={!(parsedAmount > 0)}
         />
       }>
+      {proofId ? <Stack.Screen options={{ title: 'Check proof and record' }} /> : null}
       <View style={{ gap: Spacing.one }}>
         <T variant="heading">{d.number}</T>
         <KeyValue label="Balance due" value={formatCurrency(balance, d.currency)} strong />
+        {proofId ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.two }}>
+            <Badge label="Proof attached" tone="success" />
+            <T variant="small" muted>
+              Check the money is in your account first.
+            </T>
+          </View>
+        ) : null}
       </View>
 
       <Field
@@ -91,9 +111,7 @@ export default function RecordPaymentScreen() {
         placeholder="e.g. bank reference on the proof of payment"
       />
 
-      {record.isError && !fieldErrors?.amount ? (
-        <T tone="danger">{record.error.message}</T>
-      ) : null}
+      {mutation.isError && !fieldErrors?.amount ? <T tone="danger">{mutation.error.message}</T> : null}
     </Screen>
   );
 }

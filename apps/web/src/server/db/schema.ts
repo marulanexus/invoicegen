@@ -681,6 +681,8 @@ export const paymentProofs = pgTable(
     status: proofStatusEnum("status").notNull().default("pending"),
     rejectionReason: text("rejection_reason"),
     paymentId: uuid("payment_id").references(() => payments.id, { onDelete: "set null" }),
+    /** The business member who added it (e.g. a screenshot the client sent); null = the payer, via the link. */
+    uploadedByMemberId: uuid("uploaded_by_member_id").references(() => members.id, { onDelete: "set null" }),
     reviewedByMemberId: uuid("reviewed_by_member_id").references(() => members.id, { onDelete: "set null" }),
     reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

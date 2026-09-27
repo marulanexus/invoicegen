@@ -1,0 +1,2 @@
+ALTER TABLE "payment_proofs" ADD COLUMN "uploaded_by_member_id" uuid;--> statement-breakpoint
+ALTER TABLE "payment_proofs" ADD CONSTRAINT "payment_proofs_uploaded_by_member_id_members_id_fk" FOREIGN KEY ("uploaded_by_member_id") REFERENCES "public"."members"("id") ON DELETE set null ON UPDATE no action;

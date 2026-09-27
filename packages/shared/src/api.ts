@@ -209,6 +209,8 @@ export interface PaymentProof {
   status: "pending" | "accepted" | "rejected";
   rejectionReason: string | null;
   paymentId: string | null;
+  /** Set when someone in the business added it; null = the client, via the link. */
+  uploadedByMemberId: string | null;
   createdAt: string;
 }
 

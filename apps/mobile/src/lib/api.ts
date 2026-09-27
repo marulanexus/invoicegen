@@ -17,6 +17,8 @@ import type {
   NoteInput,
   Payment,
   PaymentInput,
+  PaymentMethod,
+  PaymentProof,
   PaymentListItem,
   StatusAction,
 } from '@invoicegen/shared/api';
@@ -108,7 +110,36 @@ export function useApi() {
     unregisterDevice: (token: string) => call<{ removed: boolean }>('DELETE', '/devices', { token }),
 
     proofFileUrl: (id: string) => call<{ url: string }>('GET', `/proofs/${id}/file`),
-    acceptProof: (id: string, input: { amount: number; paidAt: string; reference?: string }) =>
+    /**
+     * Upload a proof of payment for an invoice (photo or PDF from the phone).
+     * `file` is a local URI from the camera, photo library or document picker.
+     */
+    addProof: async (
+      documentId: string,
+      file: { uri: string; name: string; type: string }
+    ): Promise<PaymentProof> => {
+      const token = await getToken();
+      const body = new FormData();
+      // React Native's FormData accepts a { uri, name, type } file descriptor.
+      body.append('file', file as unknown as Blob);
+      let res: Response;
+      try {
+        res = await fetch(`${API_URL}/api/v1/documents/${documentId}/proofs`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token ?? ''}` },
+          body,
+        });
+      } catch {
+        throw new ApiError("Can't reach InvoiceGen. Check your connection.", 0, 'network');
+      }
+      const json = (await res.json().catch(() => null)) as { data: { proof: PaymentProof } } | ApiErrorBody | null;
+      if (!res.ok || !json || !('data' in json)) {
+        const err = json && 'error' in json ? json.error : null;
+        throw new ApiError(err?.message ?? 'Upload failed.', res.status, err?.code ?? 'internal', err?.fieldErrors);
+      }
+      return json.data.proof;
+    },
+    acceptProof: (id: string, input: { amount: number; paidAt: string; method?: PaymentMethod; reference?: string }) =>
       call<unknown>('POST', `/proofs/${id}/accept`, input),
     rejectProof: (id: string, reason: string) => call<unknown>('POST', `/proofs/${id}/reject`, { reason }),
 

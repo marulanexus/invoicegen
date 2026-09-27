@@ -48,6 +48,14 @@
           "defaultChannel": "default",
           "icon": "./assets/images/notification-icon.png"
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Allow InvoiceGen to use your camera to photograph proofs of payment.",
+          "photosPermission": "Allow InvoiceGen to choose proof-of-payment screenshots from your photos.",
+          "microphonePermission": false
+        }
       ]
     ],
     "experiments": {

@@ -131,7 +131,7 @@ export function ProofReview({
               <Badge variant={STATUS[p.status].variant}>{STATUS[p.status].label}</Badge>
             </div>
             <p className="text-muted-foreground">
-              {[p.paidOn ? `Paid ${formatDate(p.paidOn)}` : null, p.reference ? `Ref ${p.reference}` : null, `Sent ${formatDate(p.createdAt)}`]
+              {[p.uploadedByMemberId ? "Added by your team" : "From the client", p.paidOn ? `Paid ${formatDate(p.paidOn)}` : null, p.reference ? `Ref ${p.reference}` : null, `Sent ${formatDate(p.createdAt)}`]
                 .filter(Boolean)
                 .join(" · ")}
             </p>

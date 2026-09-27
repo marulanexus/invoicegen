@@ -6,7 +6,7 @@ import { z } from "zod";
 import { amountOwed } from "@invoicegen/shared/calc";
 
 import { db } from "@/server/db";
-import { documents, paymentProofs, type PaymentProof } from "@/server/db/schema";
+import { documents, paymentProofs, type Document, type PaymentProof } from "@/server/db/schema";
 import type { OrgContext } from "@/server/auth/context";
 import { logActivity } from "@/server/activity";
 import { notifyProofReceived } from "@/server/notifications/events";
@@ -41,21 +41,25 @@ function blankToUndefined(raw: Record<string, unknown>) {
   return Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, v === "" || v === null ? undefined : v]));
 }
 
-/** Public: a payer uploads proof for the invoice behind a share link. */
-export async function submitProofByToken(
-  publicToken: string,
-  file: { name: string; size: number; bytes: Uint8Array },
-  rawFields: Record<string, unknown>
-): Promise<ServiceResult<{ id: string }>> {
-  const rl = rateLimit(`proof:${publicToken}`, 5, 10 * 60_000);
-  if (!rl.ok) return fail("rate_limited", "Too many uploads. Please wait a few minutes and try again.");
+type ProofFile = { name: string; size: number; bytes: Uint8Array };
+
+/**
+ * Store a proof for an issued invoice that's still owed: checks the file by
+ * its bytes, caps pending proofs, saves to the private bucket. `uploadedBy`
+ * is the member who added it, or null when the payer did (via the link).
+ */
+async function storeProof(
+  doc: Document,
+  file: ProofFile,
+  rawFields: Record<string, unknown>,
+  uploadedBy: { memberId: string } | null
+): Promise<ServiceResult<{ proof: PaymentProof }>> {
   if (!isPrivateStorageConfigured) return fail("conflict", "Uploads aren't available for this invoice.");
 
   const fields = submitFields.safeParse(blankToUndefined(rawFields));
   if (!fields.success) return invalid(fields.error);
 
-  const [doc] = await db.select().from(documents).where(eq(documents.publicToken, publicToken)).limit(1);
-  if (!doc || doc.type !== "invoice" || doc.status === "void" || doc.status === "draft") {
+  if (doc.type !== "invoice" || doc.status === "void" || doc.status === "draft") {
     return fail("not_found", "Invoice not found.");
   }
   if (amountOwed(doc) <= 0) return fail("conflict", "This invoice is already paid.");
@@ -71,7 +75,12 @@ export async function submitProofByToken(
     .from(paymentProofs)
     .where(and(eq(paymentProofs.documentId, doc.id), eq(paymentProofs.status, "pending")));
   if (pending >= MAX_PENDING_PER_DOCUMENT) {
-    return fail("conflict", "This invoice already has several proofs waiting to be checked. Please contact the business.");
+    return fail(
+      "conflict",
+      uploadedBy
+        ? "This invoice already has several proofs waiting. Accept or reject them first."
+        : "This invoice already has several proofs waiting to be checked. Please contact the business."
+    );
   }
 
   const id = randomUUID();
@@ -79,35 +88,81 @@ export async function submitProofByToken(
   if (!key) return fail("conflict", "Uploads aren't available for this invoice.");
 
   const d = fields.data;
-  await db.insert(paymentProofs).values({
-    id,
-    orgId: doc.orgId,
-    documentId: doc.id,
-    fileKey: key,
-    fileName: safeFileName(file.name, type.ext),
-    contentType: type.contentType,
-    size: file.size,
-    amount: d.amount !== undefined ? toMoneyString(d.amount) : null,
-    paidOn: d.paidOn ?? null,
-    reference: d.reference ?? null,
-    note: d.note ?? null,
-  });
+  const [proof] = await db
+    .insert(paymentProofs)
+    .values({
+      id,
+      orgId: doc.orgId,
+      documentId: doc.id,
+      fileKey: key,
+      fileName: safeFileName(file.name, type.ext),
+      contentType: type.contentType,
+      size: file.size,
+      amount: d.amount !== undefined ? toMoneyString(d.amount) : null,
+      paidOn: d.paidOn ?? null,
+      reference: d.reference ?? null,
+      note: d.note ?? null,
+      uploadedByMemberId: uploadedBy?.memberId ?? null,
+    })
+    .returning();
 
+  const amountText = d.amount !== undefined ? formatCurrency(d.amount, doc.currency) : null;
   await logActivity({
     orgId: doc.orgId,
-    action: "proof.received",
+    actorMemberId: uploadedBy?.memberId ?? null,
+    action: uploadedBy ? "proof.added" : "proof.received",
     entityType: "document",
     entityId: doc.id,
-    description: `Proof of payment received for ${doc.number}${d.amount !== undefined ? ` (${formatCurrency(d.amount, doc.currency)})` : ""}`,
+    description: `Proof of payment ${uploadedBy ? "added" : "received"} for ${doc.number}${amountText ? ` (${amountText})` : ""}`,
   });
-  notifyProofReceived(doc.orgId, {
-    documentId: doc.id,
-    number: doc.number,
-    amount: d.amount !== undefined ? formatCurrency(d.amount, doc.currency) : null,
-    clientName: typeof doc.billToSnapshot?.name === "string" ? (doc.billToSnapshot.name as string) : null,
-  });
+  // The owner doesn't need a push about a proof they added themselves.
+  if (!uploadedBy) {
+    notifyProofReceived(doc.orgId, {
+      documentId: doc.id,
+      number: doc.number,
+      amount: amountText,
+      clientName: typeof doc.billToSnapshot?.name === "string" ? (doc.billToSnapshot.name as string) : null,
+    });
+  }
 
-  return ok({ id });
+  return ok({ proof });
+}
+
+/** Public: a payer uploads proof for the invoice behind a share link. */
+export async function submitProofByToken(
+  publicToken: string,
+  file: ProofFile,
+  rawFields: Record<string, unknown>
+): Promise<ServiceResult<{ id: string }>> {
+  const rl = rateLimit(`proof:${publicToken}`, 5, 10 * 60_000);
+  if (!rl.ok) return fail("rate_limited", "Too many uploads. Please wait a few minutes and try again.");
+
+  const [doc] = await db.select().from(documents).where(eq(documents.publicToken, publicToken)).limit(1);
+  if (!doc) return fail("not_found", "Invoice not found.");
+  const res = await storeProof(doc, file, rawFields, null);
+  return res.ok ? ok({ id: res.data.proof.id }) : res;
+}
+
+/**
+ * The owner adds a proof the client sent another way (a WhatsApp screenshot,
+ * an emailed PDF), usually straight from the phone's camera or photos.
+ */
+export async function addProofForOrg(
+  ctx: OrgContext,
+  documentId: string,
+  file: ProofFile,
+  rawFields: Record<string, unknown>
+): Promise<ServiceResult<{ proof: PaymentProof }>> {
+  const rl = rateLimit(`proof-owner:${ctx.org.id}`, 30, 10 * 60_000);
+  if (!rl.ok) return fail("rate_limited", "Too many uploads. Please wait a few minutes and try again.");
+
+  const [doc] = await db
+    .select()
+    .from(documents)
+    .where(and(eq(documents.id, documentId), eq(documents.orgId, ctx.org.id)))
+    .limit(1);
+  if (!doc) return fail("not_found", "Invoice not found.");
+  return storeProof(doc, file, rawFields, { memberId: ctx.member.id });
 }
 
 export async function listProofs(orgId: string, documentId: string): Promise<PaymentProof[]> {

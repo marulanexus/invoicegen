@@ -10,8 +10,9 @@ import { Badge, Button, Card, ErrorView, KeyValue, List, Loading, Row, Screen, S
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { ApiError, useApi } from '@/lib/api';
-import { balanceOf, formatCurrency, formatDate, PAYMENT_METHOD, STATUS, todayIso } from '@/lib/format';
-import { useChangeStatus, useConvertQuote, useDocument, useMe, useReviewProof, useSendDocument } from '@/lib/queries';
+import { balanceOf, formatCurrency, formatDate, PAYMENT_METHOD, STATUS } from '@/lib/format';
+import { useAddProof, useChangeStatus, useConvertQuote, useDocument, useMe, useReviewProof, useSendDocument } from '@/lib/queries';
+import { pickProof, type ProofSource } from '@/lib/proof-picker';
 import { sendViaWhatsApp } from '@/lib/share';
 
 function errorMessage(err: unknown): string {
@@ -44,6 +45,7 @@ export default function DocumentScreen() {
   const send = useSendDocument(id);
   const convert = useConvertQuote(id);
   const reviewProof = useReviewProof(id);
+  const addProofMutation = useAddProof(id);
   const [busy, setBusy] = useState<'whatsapp' | 'pdf' | null>(null);
 
   if (doc.isPending) return <Loading />;
@@ -61,6 +63,7 @@ export default function DocumentScreen() {
   const canIssueNotes = d.type === 'invoice' && d.status !== 'draft' && d.status !== 'void';
   const heading = taxInvoice.heading.charAt(0) + taxInvoice.heading.slice(1).toLowerCase();
   const balance = balanceOf(d);
+  const canAddProof = canIssueNotes && balance > 0;
   const money = (v: string | number) => formatCurrency(v, d.currency);
   const business = me.data?.business?.displayName ?? '';
   const canTakePayment = d.type === 'invoice' && balance > 0 && d.status !== 'void';
@@ -96,25 +99,25 @@ export default function DocumentScreen() {
     }
   }
 
-  function acceptProof(p: PaymentProof) {
-    const owed = balanceOf(doc.data!.document);
-    const amount = p.amount ? Math.min(Number(p.amount), owed) : owed;
-    const paidAt = p.paidOn ?? todayIso();
-    Alert.alert(
-      `Record ${formatCurrency(amount, doc.data!.document.currency)}?`,
-      `Paid ${formatDate(paidAt)} by EFT${p.reference ? `, ref ${p.reference}` : ''}. Check it's in your bank account first.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Record payment',
-          onPress: () =>
-            reviewProof.mutate(
-              { id: p.id, action: 'accept', amount, paidAt, reference: p.reference ?? undefined },
-              { onError: (err) => Alert.alert("Couldn't record it", errorMessage(err)) }
-            ),
-        },
-      ]
-    );
+  /** Review on the payment screen, pre-filled from the proof (the owner can adjust part-payments). */
+  function acceptProof(p: Pick<PaymentProof, 'id' | 'amount' | 'paidOn' | 'reference'>) {
+    const params = new URLSearchParams({ proofId: p.id });
+    if (p.amount) params.set('amount', p.amount);
+    if (p.paidOn) params.set('paidOn', p.paidOn);
+    if (p.reference) params.set('reference', p.reference);
+    router.push(`/documents/${id}/payment?${params.toString()}`);
+  }
+
+  async function addProof(source: ProofSource) {
+    const picked = await pickProof(source);
+    if (!picked.ok) {
+      if (picked.reason !== 'cancelled') Alert.alert("Couldn't add the proof", picked.message);
+      return;
+    }
+    addProofMutation.mutate(picked.file, {
+      onSuccess: (proof) => acceptProof(proof),
+      onError: (err) => Alert.alert("Couldn't upload the proof", errorMessage(err)),
+    });
   }
 
   function rejectProof(p: PaymentProof) {
@@ -279,8 +282,21 @@ export default function DocumentScreen() {
           </Card>
         </Section>
 
-        {proofs.length > 0 ? (
+        {proofs.length > 0 || canAddProof ? (
           <Section title="Proof of payment">
+            {canAddProof ? (
+              <Card>
+                <T variant="small" muted>
+                  Got proof from the client on WhatsApp or email? Add it here, then record the payment.
+                </T>
+                <View style={{ flexDirection: 'row', gap: Spacing.two }}>
+                  <Button label="Camera" variant="secondary" style={{ flex: 1 }} onPress={() => addProof('camera')} disabled={addProofMutation.isPending} />
+                  <Button label="Photos" variant="secondary" style={{ flex: 1 }} onPress={() => addProof('photos')} disabled={addProofMutation.isPending} />
+                  <Button label="PDF" variant="secondary" style={{ flex: 1 }} onPress={() => addProof('pdf')} disabled={addProofMutation.isPending} />
+                </View>
+                {addProofMutation.isPending ? <T variant="small" muted>Uploading…</T> : null}
+              </Card>
+            ) : null}
             {proofs.map((p) => (
               <Card key={p.id}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -291,7 +307,7 @@ export default function DocumentScreen() {
                   />
                 </View>
                 <T variant="small" muted>
-                  {[p.paidOn ? `Paid ${formatDate(p.paidOn)}` : null, p.reference ? `Ref ${p.reference}` : null, `Sent ${formatDate(p.createdAt)}`]
+                  {[p.uploadedByMemberId ? 'Added by you' : 'From the client', p.paidOn ? `Paid ${formatDate(p.paidOn)}` : null, p.reference ? `Ref ${p.reference}` : null, `Sent ${formatDate(p.createdAt)}`]
                     .filter(Boolean)
                     .join(' · ')}
                 </T>

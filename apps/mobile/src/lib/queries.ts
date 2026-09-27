@@ -6,6 +6,7 @@ import type {
   DocumentType,
   NoteInput,
   PaymentInput,
+  PaymentMethod,
   StatusAction,
 } from '@invoicegen/shared/api';
 
@@ -117,11 +118,25 @@ export function useReviewProof(documentId: string) {
   const api = useApi();
   const invalidate = useInvalidateMoney();
   return useMutation({
-    mutationFn: (input: { id: string } & ({ action: 'accept'; amount: number; paidAt: string; reference?: string } | { action: 'reject'; reason: string })) =>
+    mutationFn: (
+      input: { id: string } & (
+        | { action: 'accept'; amount: number; paidAt: string; method?: PaymentMethod; reference?: string }
+        | { action: 'reject'; reason: string }
+      )
+    ) =>
       input.action === 'accept'
-        ? api.acceptProof(input.id, { amount: input.amount, paidAt: input.paidAt, reference: input.reference })
+        ? api.acceptProof(input.id, { amount: input.amount, paidAt: input.paidAt, method: input.method, reference: input.reference })
         : api.rejectProof(input.id, input.reason),
     onSuccess: () => invalidate(documentId),
+  });
+}
+
+export function useAddProof(documentId: string) {
+  const api = useApi();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (file: { uri: string; name: string; type: string }) => api.addProof(documentId, file),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.document(documentId) }),
   });
 }
 
