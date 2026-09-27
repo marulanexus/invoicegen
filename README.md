@@ -30,6 +30,20 @@ npm install
 
 Run a script in one workspace with `-w`, e.g. `npm run db:push -w @invoicegen/web`.
 
+## Running the mobile app on your phone
+
+1. Install **Expo Go** on your phone (Play Store / App Store).
+2. `cp apps/mobile/.env.example apps/mobile/.env.local` and set
+   `EXPO_PUBLIC_API_URL` to your computer's LAN address (e.g. `http://192.168.1.20:3000`)
+   and `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY` to the web app's publishable key.
+3. Start both servers: `npm run dev:web` and, in a second terminal, `npm run dev:mobile`.
+4. Scan the QR code with Expo Go (phone and computer on the same Wi-Fi). If the
+   phone can't reach the API, allow Node.js through the Windows firewall on
+   private networks.
+
+The app talks only to `apps/web`'s `/api/v1` with the signed-in user's Clerk
+session token; it never connects to the database directly.
+
 ## Adding dependencies
 
 - Web or shared: `npm install <pkg> -w @invoicegen/web` (or `-w @invoicegen/shared`).

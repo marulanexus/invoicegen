@@ -6,7 +6,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./money": "./src/money.ts",
-    "./calc": "./src/calc.ts"
+    "./calc": "./src/calc.ts",
+    "./api": "./src/api.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
