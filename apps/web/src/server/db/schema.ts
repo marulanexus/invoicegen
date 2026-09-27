@@ -139,6 +139,8 @@ export const businessProfiles = pgTable("business_profiles", {
   defaultTemplateKey: text("default_template_key").notNull().default("classic"),
   defaultFooter: text("default_footer"),
 
+  /** Registered VAT vendor: only vendors may issue (and charge VAT on) tax invoices. */
+  vatRegistered: boolean("vat_registered").notNull().default(false),
   taxId: text("tax_id"),
   taxLabel: text("tax_label").default("Tax"),
   defaultTaxRate: numeric("default_tax_rate", { precision: 5, scale: 2 })

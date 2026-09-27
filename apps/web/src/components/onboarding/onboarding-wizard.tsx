@@ -15,6 +15,7 @@ import {
 } from "@/components/form/fields";
 import { cn } from "@/lib/utils";
 import { SUPPORTED_CURRENCIES } from "@/lib/money";
+import { isSouthAfrica, ZA_VAT_RATE } from "@invoicegen/shared/tax-invoice";
 import { completeOnboarding } from "@/server/onboarding/actions";
 
 type FormState = {
@@ -35,6 +36,8 @@ type FormState = {
   taxLabel: string;
   defaultTaxRate: string;
   taxInclusive: boolean;
+  vatRegistered: boolean;
+  taxId: string;
   paymentTermsDays: string;
   invoicePrefix: string;
   quotePrefix: string;
@@ -73,6 +76,8 @@ export function OnboardingWizard({
     taxLabel: "Tax",
     defaultTaxRate: "0",
     taxInclusive: false,
+    vatRegistered: false,
+    taxId: "",
     paymentTermsDays: "14",
     invoicePrefix: "INV-",
     quotePrefix: "QUO-",
@@ -110,6 +115,7 @@ export function OnboardingWizard({
         toast.error(res.error ?? "Something went wrong");
         // Jump back to the first step that has an error.
         if (res.fieldErrors?.displayName) setStep(0);
+        else if (res.fieldErrors?.taxId || res.fieldErrors?.defaultTaxRate) setStep(2);
         return;
       }
       toast.success("You're all set! Welcome to InvoiceGen.");
@@ -281,6 +287,35 @@ export function OnboardingWizard({
                 error={err("defaultTaxRate")}
               />
             </div>
+            <SwitchField
+              label="Registered for VAT"
+              description={
+                isSouthAfrica(form.country)
+                  ? "Only VAT vendors may charge VAT. Your invoices become SARS tax invoices showing your VAT number."
+                  : "Turn on if you're registered to charge VAT or sales tax."
+              }
+              checked={form.vatRegistered}
+              onCheckedChange={(on) =>
+                setForm((f) => ({
+                  ...f,
+                  vatRegistered: on,
+                  ...(isSouthAfrica(f.country)
+                    ? on
+                      ? { taxLabel: "VAT", defaultTaxRate: String(ZA_VAT_RATE) }
+                      : { defaultTaxRate: "0" }
+                    : {}),
+                }))
+              }
+            />
+            {form.vatRegistered && (
+              <TextField
+                label="VAT number"
+                value={form.taxId}
+                onValueChange={(v) => set("taxId", v)}
+                error={err("taxId")}
+                hint={isSouthAfrica(form.country) ? "10 digits starting with 4, as on your SARS VAT registration" : undefined}
+              />
+            )}
             <SwitchField
               label="Prices include tax"
               description="Turn on if your line item prices are tax-inclusive."

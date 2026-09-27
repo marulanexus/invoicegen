@@ -174,6 +174,12 @@ export interface FullDocument {
   client: Client | null;
   items: LineItem[];
   payments: Payment[];
+  /** SARS status: heading ("TAX INVOICE"…) and what blocks issuing a draft. */
+  taxInvoice: {
+    heading: string;
+    vatRegistered: boolean;
+    problems: import("./tax-invoice").TaxInvoiceProblem[];
+  };
 }
 
 export interface LineItemInput {

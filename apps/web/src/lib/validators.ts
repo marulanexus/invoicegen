@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isSouthAfrica, normalizeZaVatNumber } from "@invoicegen/shared/tax-invoice";
 
 const optionalString = z
   .string()
@@ -16,7 +17,8 @@ const optionalEmail = z
 
 /* ─────────────────────────── Business profile ────────────────────────── */
 
-export const businessProfileSchema = z.object({
+export const businessProfileSchema = z
+  .object({
   displayName: z.string().trim().min(1, "Business name is required").max(120),
   legalName: optionalString,
   email: optionalEmail,
@@ -32,6 +34,7 @@ export const businessProfileSchema = z.object({
   brandColor: z.string().trim().optional().default("#2563eb"),
   defaultTemplateKey: z.string().trim().optional().default("classic"),
   taxId: optionalString,
+  vatRegistered: z.boolean().optional().default(false),
   taxLabel: z.string().trim().optional().default("Tax"),
   defaultTaxRate: z.coerce.number().min(0).max(100).default(0),
   taxInclusive: z.boolean().optional().default(false),
@@ -42,7 +45,22 @@ export const businessProfileSchema = z.object({
   receiptPrefix: z.string().trim().max(12).optional().default("REC-"),
   defaultNotes: optionalString,
   defaultTerms: optionalString,
-});
+  })
+  .superRefine((d, ctx) => {
+    // A South African VAT vendor's tax invoices must carry a valid VAT number.
+    if (d.vatRegistered && isSouthAfrica(d.country) && !normalizeZaVatNumber(d.taxId)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["taxId"],
+        message: "Enter your VAT number: 10 digits starting with 4",
+      });
+    }
+  })
+  .transform((d) => ({
+    ...d,
+    // Store SA VAT numbers without spaces or dashes.
+    taxId: isSouthAfrica(d.country) ? (normalizeZaVatNumber(d.taxId) ?? d.taxId) : d.taxId,
+  }));
 
 export type BusinessProfileInput = z.infer<typeof businessProfileSchema>;
 

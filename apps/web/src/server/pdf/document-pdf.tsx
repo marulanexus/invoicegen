@@ -7,7 +7,7 @@ import {
   View,
 } from "@react-pdf/renderer";
 
-import { documentTitle, type DocumentView } from "@/lib/document-view";
+import { taxRatesOf, type DocumentView } from "@/lib/document-view";
 import { formatCurrency } from "@/lib/money";
 import { formatDate } from "@/lib/format";
 
@@ -106,10 +106,13 @@ export function DocumentPdf({ view }: { view: DocumentView }) {
   const cur = view.currency;
   const hasTax = view.taxTotal > 0;
   const hasDiscount = view.discountTotal > 0;
+  const taxRates = taxRatesOf(view.items);
+  // SARS: a VAT vendor shows its "VAT registration number" (and the client's).
+  const taxIdLabel = view.from.vatRegistered ? "VAT No." : "Tax ID";
 
   return (
     <Document
-      title={`${documentTitle(view.type)} ${view.number}`}
+      title={`${view.heading} ${view.number}`}
       author={view.from.name}
     >
       <Page size="A4" style={styles.page}>
@@ -132,13 +135,15 @@ export function DocumentPdf({ view }: { view: DocumentView }) {
             ))}
             {view.from.email ? <Text style={styles.muted}>{view.from.email}</Text> : null}
             {view.from.taxId ? (
-              <Text style={styles.muted}>Tax ID: {view.from.taxId}</Text>
+              <Text style={styles.muted}>
+                {taxIdLabel}: {view.from.taxId}
+              </Text>
             ) : null}
           </View>
 
           <View style={{ alignItems: "flex-end" }}>
             <Text style={[styles.docTitle, { color: accent }]}>
-              {documentTitle(view.type)}
+              {view.heading}
             </Text>
             <Text style={styles.docNumber}>{view.number}</Text>
             <View style={{ marginTop: 8, alignItems: "flex-end" }}>
@@ -172,6 +177,11 @@ export function DocumentPdf({ view }: { view: DocumentView }) {
             ))}
             {view.billTo.email ? (
               <Text style={styles.muted}>{view.billTo.email}</Text>
+            ) : null}
+            {view.billTo.taxId ? (
+              <Text style={styles.muted}>
+                {taxIdLabel}: {view.billTo.taxId}
+              </Text>
             ) : null}
           </View>
         ) : null}
@@ -222,7 +232,9 @@ export function DocumentPdf({ view }: { view: DocumentView }) {
             ) : null}
             {hasTax ? (
               <View style={styles.totalRow}>
-                <Text style={styles.muted}>{view.taxLabel}</Text>
+                <Text style={styles.muted}>
+                  {taxRates.length === 1 ? `${view.taxLabel} (${taxRates[0]}%)` : view.taxLabel}
+                </Text>
                 <Text>{formatCurrency(view.taxTotal, cur)}</Text>
               </View>
             ) : null}
@@ -230,6 +242,11 @@ export function DocumentPdf({ view }: { view: DocumentView }) {
               <Text>Total</Text>
               <Text>{formatCurrency(view.total, cur)}</Text>
             </View>
+            {view.taxInclusive && hasTax ? (
+              <Text style={[styles.muted, { textAlign: "right", marginTop: 4 }]}>
+                Amounts include {view.taxLabel} at {taxRates.join("%, ")}%.
+              </Text>
+            ) : null}
             {view.amountPaid > 0 ? (
               <>
                 <View style={styles.totalRow}>

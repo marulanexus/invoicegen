@@ -13,7 +13,9 @@ import { SelectField, SwitchField, TextAreaField, TextField } from "@/components
 import { DocumentPreview } from "@/components/documents/document-preview";
 import { cn } from "@/lib/utils";
 import { SUPPORTED_CURRENCIES, formatCurrency } from "@/lib/money";
-import { viewLinesAndTotals, type DocumentView, type PartyView } from "@/lib/document-view";
+import { documentHeading, viewLinesAndTotals, type DocumentView, type PartyView } from "@/lib/document-view";
+import { taxInvoiceProblems } from "@invoicegen/shared/tax-invoice";
+import { TaxInvoiceChecklist } from "@/components/documents/tax-invoice-checklist";
 import { DOCUMENT_TEMPLATES } from "@/lib/templates";
 import { createDocument, updateDocument } from "@/server/documents/actions";
 import type { BusinessProfile, Client, Document, LineItem } from "@/server/db/schema";
@@ -132,6 +134,7 @@ export function DocumentBuilder({
       email: profile.email,
       phone: profile.phone,
       taxId: profile.taxId,
+      vatRegistered: profile.vatRegistered,
     };
     const billTo: PartyView | null = selectedClient
       ? {
@@ -145,11 +148,13 @@ export function DocumentBuilder({
           ].filter(Boolean) as string[],
           email: selectedClient.email,
           phone: selectedClient.phone,
+          taxId: selectedClient.taxId,
         }
       : null;
 
     return {
       type,
+      heading: documentHeading(type, profile.vatRegistered),
       number: ex?.number ?? `${prefixFor(type, profile)}…`,
       status: ex?.status,
       currency,
@@ -180,6 +185,34 @@ export function DocumentBuilder({
     dueDate, validUntil, poNumber, taxLabel, notes, terms, accentColor,
     templateKey, showPoweredBy,
   ]);
+
+  // Live SARS check against the details the invoice will be issued with.
+  const taxProblems = useMemo(
+    () =>
+      taxInvoiceProblems({
+        type,
+        currency,
+        total: view.total,
+        taxTotal: view.taxTotal,
+        lines: view.items.map((i) => ({ description: i.description, taxRate: i.taxRate })),
+        supplier: {
+          name: profile.displayName,
+          address: view.from.lines.filter((l) => l !== profile.country),
+          vatNumber: profile.taxId,
+          country: profile.country,
+          vatRegistered: profile.vatRegistered,
+        },
+        recipient: selectedClient
+          ? {
+              name: selectedClient.name,
+              address: (view.billTo?.lines ?? []).filter((l) => l !== selectedClient.country && l !== selectedClient.companyName),
+              vatNumber: selectedClient.taxId,
+              country: selectedClient.country,
+            }
+          : null,
+      }),
+    [type, currency, view, profile, selectedClient]
+  );
 
   function save() {
     setErrors({});
@@ -395,6 +428,11 @@ export function DocumentBuilder({
               <TextAreaField label="Terms & conditions" value={terms} onValueChange={setTerms} />
             </CardContent>
           </Card>
+
+          <TaxInvoiceChecklist
+            problems={taxProblems}
+            clientHref={selectedClient ? `/clients/${selectedClient.id}/edit` : undefined}
+          />
 
           <div className="flex items-center justify-end gap-2">
             <Button variant="ghost" onClick={() => router.back()} disabled={pending}>

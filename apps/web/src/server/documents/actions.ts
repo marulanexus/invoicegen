@@ -8,6 +8,7 @@ import {
   convertQuoteToInvoiceForOrg,
   createDocumentForOrg,
   deleteDocumentForOrg,
+  getShareLinkForOrg,
   updateDocumentForOrg,
   type StatusAction,
 } from "@/server/documents/service";
@@ -78,4 +79,20 @@ export async function convertQuoteToInvoice(
   revalidatePath("/quotes");
   revalidatePath(`/documents/${quoteId}`);
   return { ok: true, id: res.data.id };
+}
+
+/**
+ * The public link to send the client. For a draft this issues it (SARS
+ * checks, frozen details, marked sent), same as sharing from the phone.
+ */
+export async function shareDocument(
+  id: string
+): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
+  const ctx = await requireOrgContext();
+  const res = await getShareLinkForOrg(ctx, id);
+  if (!res.ok) return { ok: false, error: res.error };
+
+  revalidatePath("/documents");
+  revalidatePath(`/documents/${id}`);
+  return { ok: true, url: res.data.url };
 }

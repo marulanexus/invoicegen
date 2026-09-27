@@ -6,6 +6,7 @@ import { Alert, View } from 'react-native';
 
 import { Badge, Button, Card, ErrorView, KeyValue, List, Loading, Row, Screen, Section, T } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
 import { ApiError, useApi } from '@/lib/api';
 import { balanceOf, formatCurrency, formatDate, PAYMENT_METHOD, STATUS } from '@/lib/format';
 import { useChangeStatus, useConvertQuote, useDocument, useMe, useSendDocument } from '@/lib/queries';
@@ -33,6 +34,7 @@ function availableActions(doc: FullDocument['document']): { action: StatusAction
 
 export default function DocumentScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const theme = useTheme();
   const api = useApi();
   const me = useMe();
   const doc = useDocument(id);
@@ -50,7 +52,8 @@ export default function DocumentScreen() {
     );
   }
 
-  const { document: d, client, items, payments } = doc.data;
+  const { document: d, client, items, payments, taxInvoice } = doc.data;
+  const heading = taxInvoice.heading.charAt(0) + taxInvoice.heading.slice(1).toLowerCase();
   const balance = balanceOf(d);
   const money = (v: string | number) => formatCurrency(v, d.currency);
   const business = me.data?.business?.displayName ?? '';
@@ -139,7 +142,7 @@ export default function DocumentScreen() {
         <Card>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
             <T variant="small" muted>
-              {TYPE_LABEL[d.type]} · {formatDate(d.issueDate)}
+              {heading} · {formatDate(d.issueDate)}
             </T>
             <Badge label={STATUS[d.status].label} tone={STATUS[d.status].tone} />
           </View>
@@ -155,6 +158,28 @@ export default function DocumentScreen() {
             <KeyValue label="Valid until" value={formatDate(d.validUntil)} />
           ) : null}
         </Card>
+
+        {d.status === 'draft' && taxInvoice.problems.length > 0 ? (
+          <Card style={{ borderColor: theme.warning }}>
+            <T variant="heading" tone="warning">
+              Fix before sending
+            </T>
+            <T variant="small" muted>
+              SARS tax invoice rules
+            </T>
+            {taxInvoice.problems.map((p) => (
+              <T key={p.code}>• {p.message}</T>
+            ))}
+            {taxInvoice.problems.some((p) => p.fix === 'client') && client ? (
+              <Button label="Edit client" variant="secondary" onPress={() => router.push(`/clients/new?id=${client.id}`)} />
+            ) : null}
+            {taxInvoice.problems.some((p) => p.fix === 'settings') ? (
+              <T variant="small" muted>
+                Business details and VAT settings are on the InvoiceGen website under Settings.
+              </T>
+            ) : null}
+          </Card>
+        ) : null}
 
         <View style={{ gap: Spacing.two }}>
           <Button label="Share on WhatsApp" onPress={shareOnWhatsApp} loading={busy === 'whatsapp'} disabled={busy !== null} />

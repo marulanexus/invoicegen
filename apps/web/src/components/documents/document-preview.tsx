@@ -1,4 +1,4 @@
-import { documentTitle, type DocumentView } from "@/lib/document-view";
+import { taxRatesOf, type DocumentView } from "@/lib/document-view";
 import { formatCurrency } from "@/lib/money";
 import { formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -17,6 +17,9 @@ export function DocumentPreview({
   const accent = view.accentColor || "#2563eb";
   const cur = view.currency;
   const hasTax = view.taxTotal > 0;
+  const taxRates = taxRatesOf(view.items);
+  // SARS: a VAT vendor shows its "VAT registration number" (and the client's).
+  const taxIdLabel = view.from.vatRegistered ? "VAT No." : "Tax ID";
   const hasDiscount = view.discountTotal > 0;
 
   return (
@@ -54,7 +57,11 @@ export function DocumentPreview({
                 <p key={i}>{l}</p>
               ))}
               {view.from.email && <p>{view.from.email}</p>}
-              {view.from.taxId && <p>Tax ID: {view.from.taxId}</p>}
+              {view.from.taxId && (
+                <p>
+                  {taxIdLabel}: {view.from.taxId}
+                </p>
+              )}
             </div>
           </div>
 
@@ -63,7 +70,7 @@ export function DocumentPreview({
               className="text-2xl font-bold tracking-tight"
               style={{ color: accent }}
             >
-              {documentTitle(view.type)}
+              {view.heading}
             </h1>
             <p className="mt-1 font-mono text-sm text-slate-700">{view.number}</p>
             <div className="mt-3 space-y-0.5 text-xs text-slate-500">
@@ -106,6 +113,11 @@ export function DocumentPreview({
                 <p key={i}>{l}</p>
               ))}
               {view.billTo.email && <p>{view.billTo.email}</p>}
+              {view.billTo.taxId && (
+                <p>
+                  {taxIdLabel}: {view.billTo.taxId}
+                </p>
+              )}
             </div>
           </div>
         )}
@@ -170,7 +182,7 @@ export function DocumentPreview({
               )}
               {hasTax && (
                 <Row
-                  label={`${view.taxLabel}`}
+                  label={taxRates.length === 1 ? `${view.taxLabel} (${taxRates[0]}%)` : view.taxLabel}
                   value={formatCurrency(view.taxTotal, cur)}
                 />
               )}
@@ -183,6 +195,11 @@ export function DocumentPreview({
                   {formatCurrency(view.total, cur)}
                 </span>
               </div>
+              {view.taxInclusive && hasTax && (
+                <p className="text-right text-[11px] text-slate-500">
+                  Amounts include {view.taxLabel} at {taxRates.join("%, ")}%.
+                </p>
+              )}
               {view.amountPaid > 0 && (
                 <>
                   <Row

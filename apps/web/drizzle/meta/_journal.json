@@ -43,6 +43,13 @@
       "when": 1790468390656,
       "tag": "0005_push_devices",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790470066822,
+      "tag": "0006_vat_registered",
+      "breakpoints": true
     }
   ]
 }

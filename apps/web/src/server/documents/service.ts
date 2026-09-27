@@ -8,7 +8,6 @@ import {
   clients,
   documents,
   lineItems,
-  type BusinessProfile,
   type Client,
   type Document,
 } from "@/server/db/schema";
@@ -18,6 +17,8 @@ import { reserveDocumentNumber } from "@/server/documents/numbering";
 import { logActivity } from "@/server/activity";
 import { fail, invalid, ok, type ServiceResult } from "@/server/service-result";
 import { calcDocumentTotals, calcLine } from "@/lib/calc";
+import { snapshotBillTo, snapshotFrom } from "@/server/documents/snapshots";
+import { prepareIssue } from "@/server/documents/tax-invoice";
 import { toMoneyString } from "@/lib/money";
 import { env } from "@/lib/env";
 import { documentSchema, type DocumentInput, type LineItemInput } from "@/lib/validators";
@@ -30,33 +31,6 @@ export { STATUS_ACTIONS, withProfileDefaults, type StatusAction } from "@/server
  * Document business rules, shared by the web server actions and `/api/v1`.
  * Callers resolve `ctx` (the tenant) first; every query here is scoped to it.
  */
-
-function snapshotFrom(p: BusinessProfile | null) {
-  if (!p) return undefined;
-  return {
-    name: p.displayName,
-    legalName: p.legalName,
-    email: p.email,
-    phone: p.phone,
-    website: p.website,
-    address: [p.addressLine1, p.addressLine2, [p.city, p.state].filter(Boolean).join(", "), p.postalCode, p.country].filter(Boolean),
-    taxId: p.taxId,
-    logoUrl: p.logoUrl,
-  };
-}
-
-function snapshotBillTo(c: Client | undefined) {
-  if (!c) return undefined;
-  return {
-    name: c.name,
-    company: c.companyName,
-    contact: c.contactName,
-    email: c.email,
-    phone: c.phone,
-    address: [c.addressLine1, c.addressLine2, [c.city, c.state].filter(Boolean).join(", "), c.postalCode, c.country].filter(Boolean),
-    taxId: c.taxId,
-  };
-}
 
 type ClientLookup = { ok: true; client: Client | undefined } | { ok: false; result: ServiceResult<never> };
 
@@ -188,7 +162,8 @@ export async function updateDocumentForOrg(
       .update(documents)
       .set({
         ...editableColumns(d),
-        billToSnapshot: snapshotBillTo(lookup.client) ?? existing.billToSnapshot,
+        // No client chosen means no bill-to on the invoice (not the previous one).
+        billToSnapshot: snapshotBillTo(lookup.client) ?? null,
         updatedAt: new Date(),
       })
       .where(eq(documents.id, id))
@@ -209,6 +184,18 @@ export async function changeDocumentStatusForOrg(
   id: string,
   action: StatusAction
 ): Promise<ServiceResult<Document>> {
+  if (action === "send") {
+    const [draft] = await db
+      .select()
+      .from(documents)
+      .where(and(eq(documents.id, id), eq(documents.orgId, ctx.org.id)))
+      .limit(1);
+    if (draft) {
+      const prepared = await prepareIssue(ctx, draft);
+      if (!prepared.ok) return prepared;
+    }
+  }
+
   // Lock the row so the check and the change see the same state (a payment
   // being recorded concurrently waits instead of racing "Mark as paid").
   const result = await db.transaction(async (tx) => {
@@ -402,12 +389,37 @@ export function shareUrl(token: string): string {
 
 /**
  * Public link to the online view of a document, for sharing by WhatsApp or
- * SMS. Doesn't change the document's status.
+ * SMS. Sharing a draft issues it (marks it sent), like emailing it does.
  */
 export async function getShareLinkForOrg(
   ctx: OrgContext,
   id: string
 ): Promise<ServiceResult<{ url: string }>> {
+  const [doc] = await db
+    .select()
+    .from(documents)
+    .where(and(eq(documents.id, id), eq(documents.orgId, ctx.org.id)))
+    .limit(1);
+  if (!doc) return fail("not_found", "Document not found.");
+
+  // Handing a draft's link to the client issues it: SARS checks, frozen details, sent.
+  if (doc.status === "draft") {
+    const prepared = await prepareIssue(ctx, doc);
+    if (!prepared.ok) return prepared;
+    await db
+      .update(documents)
+      .set({ status: "sent", sentAt: new Date(), updatedAt: new Date() })
+      .where(and(eq(documents.id, id), eq(documents.orgId, ctx.org.id), eq(documents.status, "draft")));
+    await logActivity({
+      orgId: ctx.org.id,
+      actorMemberId: ctx.member.id,
+      action: `${doc.type}.shared`,
+      entityType: "document",
+      entityId: id,
+      description: `Shared ${doc.number} by link`,
+    });
+  }
+
   const token = await ensurePublicToken(ctx.org.id, id);
   if (!token) return fail("not_found", "Document not found.");
   return ok({ url: shareUrl(token) });

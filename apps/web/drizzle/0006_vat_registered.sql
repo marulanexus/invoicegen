@@ -1,0 +1,1 @@
+ALTER TABLE "business_profiles" ADD COLUMN "vat_registered" boolean DEFAULT false NOT NULL;

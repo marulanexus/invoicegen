@@ -4,7 +4,9 @@
  * what you preview is always what you send.
  */
 
-import { calcDocumentTotals } from "./calc";
+import { documentHeading } from "@invoicegen/shared/tax-invoice";
+
+import { calcDocumentTotals, calcLine } from "./calc";
 import { round2, toNumber } from "./money";
 import type { Document, LineItem } from "@/server/db/schema";
 
@@ -14,6 +16,8 @@ export interface PartyView {
   email?: string | null;
   phone?: string | null;
   taxId?: string | null;
+  /** Supplier only: registered VAT vendor (tax invoices, "VAT No."). */
+  vatRegistered?: boolean;
 }
 
 export interface LineView {
@@ -27,6 +31,8 @@ export interface LineView {
 
 export interface DocumentView {
   type: "invoice" | "quote" | "receipt";
+  /** "TAX INVOICE" for VAT vendors' invoices, else "INVOICE"/"QUOTE"/"RECEIPT". */
+  heading: string;
   number: string;
   status?: string;
   currency: string;
@@ -53,14 +59,11 @@ export interface DocumentView {
   showPoweredBy: boolean;
 }
 
-const DOC_TITLE: Record<DocumentView["type"], string> = {
-  invoice: "INVOICE",
-  quote: "QUOTE",
-  receipt: "RECEIPT",
-};
+export { documentHeading };
 
-export function documentTitle(type: DocumentView["type"]): string {
-  return DOC_TITLE[type];
+/** Distinct non-zero VAT rates used, for the "includes VAT at 15%" statement. */
+export function taxRatesOf(items: Pick<LineView, "taxRate">[]): number[] {
+  return [...new Set(items.map((i) => i.taxRate).filter((r) => r > 0))].sort((a, b) => a - b);
 }
 
 /** Recompute totals + per-line amounts from raw line input. */
@@ -76,17 +79,13 @@ export function viewLinesAndTotals(
 ) {
   const totals = calcDocumentTotals(rawLines, taxInclusive);
   const items: LineView[] = rawLines.map((l) => {
-    const qty = toNumber(l.quantity);
-    const price = toNumber(l.unitPrice);
-    const discountRate = toNumber(l.discountRate);
-    const net = round2(qty * price * (1 - discountRate / 100));
     return {
       description: l.description ?? "",
-      quantity: qty,
-      unitPrice: price,
-      discountRate,
+      quantity: toNumber(l.quantity),
+      unitPrice: toNumber(l.unitPrice),
+      discountRate: toNumber(l.discountRate),
       taxRate: toNumber(l.taxRate),
-      amount: net,
+      amount: calcLine(l).net,
     };
   });
   return { items, totals };
@@ -106,6 +105,7 @@ function partyFromSnapshot(
     email: typeof snap.email === "string" ? snap.email : null,
     phone: typeof snap.phone === "string" ? snap.phone : null,
     taxId: typeof snap.taxId === "string" ? snap.taxId : null,
+    vatRegistered: snap.vatRegistered === true,
   };
 }
 
@@ -123,6 +123,7 @@ export function viewFromStored(
 
   return {
     type: doc.type,
+    heading: documentHeading(doc.type, from.vatRegistered === true),
     number: doc.number,
     status: doc.status,
     currency: doc.currency,

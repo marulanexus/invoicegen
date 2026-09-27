@@ -55,6 +55,7 @@ export async function updateBusinessProfile(
       brandColor: d.brandColor,
       defaultTemplateKey: d.defaultTemplateKey,
       taxId: d.taxId,
+      vatRegistered: d.vatRegistered,
       taxLabel: d.taxLabel,
       defaultTaxRate: String(d.defaultTaxRate),
       taxInclusive: d.taxInclusive,

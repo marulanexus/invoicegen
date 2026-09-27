@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { SelectField, SwitchField, TextAreaField, TextField } from "@/components/form/fields";
+import { isSouthAfrica, ZA_VAT_RATE } from "@invoicegen/shared/tax-invoice";
 import { SUPPORTED_CURRENCIES } from "@/lib/money";
 import { DOCUMENT_TEMPLATES } from "@/lib/templates";
 import { LogoUpload } from "@/components/settings/logo-upload";
@@ -36,6 +37,7 @@ export function BusinessProfileForm({ profile }: { profile: BusinessProfile }) {
     postalCode: profile.postalCode ?? "",
     country: profile.country ?? "",
     taxId: profile.taxId ?? "",
+    vatRegistered: profile.vatRegistered ?? false,
     taxLabel: profile.taxLabel ?? "Tax",
     defaultTaxRate: profile.defaultTaxRate ?? "0",
     taxInclusive: profile.taxInclusive ?? false,
@@ -50,6 +52,22 @@ export function BusinessProfileForm({ profile }: { profile: BusinessProfile }) {
   const set = (k: keyof typeof form, v: string | boolean) =>
     setForm((f) => ({ ...f, [k]: v }));
   const err = (k: string) => errors[k]?.[0];
+  const southAfrican = isSouthAfrica(form.country);
+
+  /** Registering for VAT in South Africa: VAT at 15% unless already set up. */
+  function setVatRegistered(on: boolean) {
+    setForm((f) => ({
+      ...f,
+      vatRegistered: on,
+      ...(on && isSouthAfrica(f.country)
+        ? {
+            taxLabel: f.taxLabel === "Tax" || !f.taxLabel ? "VAT" : f.taxLabel,
+            defaultTaxRate: Number(f.defaultTaxRate || 0) === 0 ? String(ZA_VAT_RATE) : f.defaultTaxRate,
+          }
+        : {}),
+      ...(!on && isSouthAfrica(f.country) ? { defaultTaxRate: "0" } : {}),
+    }));
+  }
 
   function save() {
     setErrors({});
@@ -119,9 +137,25 @@ export function BusinessProfileForm({ profile }: { profile: BusinessProfile }) {
             <SelectField label="Default currency" value={form.defaultCurrency} onValueChange={(v) => set("defaultCurrency", v)} options={SUPPORTED_CURRENCIES.map((c) => ({ value: c.code, label: c.code }))} />
             <TextField label="Tax label" value={form.taxLabel} onValueChange={(v) => set("taxLabel", v)} />
             <TextField label="Default tax %" type="number" value={String(form.defaultTaxRate)} onValueChange={(v) => set("defaultTaxRate", v)} />
-            <TextField label="Tax ID / VAT" value={form.taxId} onValueChange={(v) => set("taxId", v)} />
+            <TextField
+              label={form.vatRegistered ? "VAT number" : "Tax ID (optional)"}
+              value={form.taxId}
+              onValueChange={(v) => set("taxId", v)}
+              error={err("taxId")}
+              hint={form.vatRegistered && southAfrican ? "10 digits starting with 4, as on your SARS VAT registration" : undefined}
+            />
             <TextField label="Payment terms (days)" type="number" value={form.paymentTermsDays} onValueChange={(v) => set("paymentTermsDays", v)} />
           </div>
+          <SwitchField
+            label="Registered for VAT"
+            description={
+              southAfrican
+                ? "Only VAT vendors may charge VAT. Your invoices become SARS tax invoices showing your VAT number."
+                : "Turn on if you're registered to charge VAT or sales tax."
+            }
+            checked={Boolean(form.vatRegistered)}
+            onCheckedChange={setVatRegistered}
+          />
           <SwitchField label="Prices include tax" checked={Boolean(form.taxInclusive)} onCheckedChange={(v) => set("taxInclusive", v)} />
           <div className="grid gap-4 sm:grid-cols-3">
             <TextField label="Invoice prefix" value={form.invoicePrefix} onValueChange={(v) => set("invoicePrefix", v)} />

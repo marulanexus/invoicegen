@@ -7,6 +7,7 @@ import { documents, type Document } from "@/server/db/schema";
 import type { OrgContext } from "@/server/auth/context";
 import { getDocument } from "@/server/documents/queries";
 import { ensurePublicToken, shareUrl } from "@/server/documents/service";
+import { prepareIssue } from "@/server/documents/tax-invoice";
 import { renderDocumentPdf } from "@/server/pdf/render";
 import { sendMail } from "@/server/email/transport";
 import {
@@ -45,6 +46,11 @@ export async function sendDocumentForOrg(
 
   const full = await getDocument(ctx.org.id, id);
   if (!full) return fail("not_found", "Document not found.");
+
+  // Emailing a draft issues it: SARS checks, and the PDF shows frozen details.
+  const prepared = await prepareIssue(ctx, full.document);
+  if (!prepared.ok) return prepared;
+  full.document = prepared.data;
 
   const recipient =
     input.to?.trim() ||

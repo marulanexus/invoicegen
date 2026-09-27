@@ -51,6 +51,7 @@ export async function completeOnboarding(
     logoUrl: data.logoUrl,
     brandColor: data.brandColor,
     taxId: data.taxId,
+    vatRegistered: data.vatRegistered,
     taxLabel: data.taxLabel,
     defaultTaxRate: String(data.defaultTaxRate),
     taxInclusive: data.taxInclusive,

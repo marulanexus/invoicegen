@@ -13,6 +13,8 @@ import { RecurringDialog } from "@/components/documents/recurring-dialog";
 import { CopyLink } from "@/components/documents/copy-link";
 import { requireOrgContext } from "@/server/auth/context";
 import { getDocument } from "@/server/documents/queries";
+import { asIssued, getTaxInvoiceStatus } from "@/server/documents/tax-invoice";
+import { TaxInvoiceChecklist } from "@/components/documents/tax-invoice-checklist";
 import { viewFromStored } from "@/lib/document-view";
 import { formatCurrency } from "@/lib/money";
 import { formatDate, statusMeta } from "@/lib/format";
@@ -27,7 +29,10 @@ export default async function DocumentDetailPage({
   const full = await getDocument(ctx.org.id, id);
   if (!full) notFound();
 
-  const { document: doc, client, items, payments } = full;
+  const { client, items, payments } = full;
+  // Drafts preview with the details they'd be issued with today.
+  const doc = await asIssued(ctx, full.document);
+  const taxStatus = doc.status === "draft" ? await getTaxInvoiceStatus(ctx, doc, items) : null;
   const view = viewFromStored(doc, items, {
     showPoweredBy: !ctx.plan.features.customBranding,
   });
@@ -57,6 +62,15 @@ export default async function DocumentDetailPage({
           defaultEmail={client?.email}
         />
       </div>
+
+      {taxStatus && taxStatus.problems.length > 0 ? (
+        <div className="mb-6">
+          <TaxInvoiceChecklist
+            problems={taxStatus.problems}
+            clientHref={client ? `/clients/${client.id}/edit` : undefined}
+          />
+        </div>
+      ) : null}
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
         {/* Preview */}
@@ -102,7 +116,7 @@ export default async function DocumentDetailPage({
             </CardContent>
           </Card>
 
-          {doc.publicToken && <CopyLink token={doc.publicToken} />}
+          {doc.status !== "void" && <CopyLink id={doc.id} isDraft={doc.status === "draft"} />}
 
           {doc.type === "invoice" && ctx.plan.features.recurringInvoices && (
             <RecurringDialog invoiceId={doc.id} />
