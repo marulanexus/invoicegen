@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Eye, Loader2, X } from "lucide-react";
+import { useAuth } from "@clerk/nextjs";
+import { Check, Eye, Loader2, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -28,27 +29,38 @@ const STATUS = {
   rejected: { label: "Rejected", variant: "secondary" },
 } as const;
 
-/** Owner review of proofs of payment uploaded on the invoice link. */
+type ProofDefaults = Pick<PaymentProof, "id" | "amount" | "paidOn" | "reference">;
+
+/**
+ * Owner review of proofs of payment: those the client uploaded on the invoice
+ * link, and ones the business adds itself (e.g. a screenshot sent on WhatsApp).
+ */
 export function ProofReview({
   documentId,
   proofs,
   balance,
   currency,
+  canAdd,
 }: {
   documentId: string;
   proofs: PaymentProof[];
   balance: number;
   currency: string;
+  /** Issued invoice with money still owed. */
+  canAdd: boolean;
 }) {
   const router = useRouter();
+  const { getToken } = useAuth();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
   const [pending, startTransition] = useTransition();
-  const [accepting, setAccepting] = useState<PaymentProof | null>(null);
+  const [accepting, setAccepting] = useState<ProofDefaults | null>(null);
   const [rejecting, setRejecting] = useState<PaymentProof | null>(null);
   const [form, setForm] = useState({ amount: "", paidAt: "", method: "bank_transfer", reference: "" });
   const [reason, setReason] = useState("");
   const [errors, setErrors] = useState<Record<string, string[]>>({});
 
-  if (proofs.length === 0) return null;
+  if (proofs.length === 0 && !canAdd) return null;
 
   function view(p: PaymentProof) {
     // Open now (a user click), fill in once the signed link arrives.
@@ -69,7 +81,39 @@ export function ProofReview({
     });
   }
 
-  function openAccept(p: PaymentProof) {
+  /** Same endpoint as the phone app; the bearer token keeps it CSRF-safe. */
+  async function upload(file: File) {
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("That file is too big (5 MB max). A screenshot works fine.");
+      return;
+    }
+    setUploading(true);
+    try {
+      const token = await getToken();
+      const body = new FormData();
+      body.append("file", file);
+      const res = await fetch(`/api/v1/documents/${documentId}/proofs`, {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body,
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) {
+        toast.error(json?.error?.message ?? "Upload failed. Please try again.");
+        return;
+      }
+      router.refresh();
+      // Straight to checking it against the bank statement and recording it.
+      openAccept(json.data.proof as ProofDefaults);
+    } catch {
+      toast.error("Upload failed. Check your connection and try again.");
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
+
+  function openAccept(p: ProofDefaults) {
     setErrors({});
     setForm({
       amount: String(p.amount ? Math.min(Number(p.amount), balance) : balance),
@@ -122,6 +166,30 @@ export function ProofReview({
         <CardTitle className="text-base">Proof of payment</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4 text-sm">
+        {canAdd && (
+          <div>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="application/pdf,image/jpeg,image/png,image/webp,image/heic,image/heif"
+              className="sr-only"
+              aria-label="Proof of payment file"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) void upload(file);
+              }}
+            />
+            <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()} disabled={uploading || pending}>
+              {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+              Add proof
+            </Button>
+            {proofs.length === 0 && (
+              <p className="mt-2 text-muted-foreground">
+                Client sent you a PDF or screenshot? Add it here to keep it with the invoice.
+              </p>
+            )}
+          </div>
+        )}
         {proofs.map((p) => (
           <div key={p.id} className="space-y-2 rounded-lg border p-3">
             <div className="flex items-center justify-between gap-2">

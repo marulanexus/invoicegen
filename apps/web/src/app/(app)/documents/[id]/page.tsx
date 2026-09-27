@@ -179,7 +179,13 @@ export default async function DocumentDetailPage({
             </div>
           )}
 
-          <ProofReview documentId={doc.id} proofs={proofs} balance={balance} currency={doc.currency} />
+          <ProofReview
+            documentId={doc.id}
+            proofs={proofs}
+            balance={balance}
+            currency={doc.currency}
+            canAdd={canIssueNotes && balance > 0.005}
+          />
 
           {(canIssueNotes || full.notes.length > 0) && (
             <Card>
