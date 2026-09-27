@@ -8,6 +8,9 @@ import { amountOwed } from "@invoicegen/shared/calc";
 import { db } from "@/server/db";
 import { clients, documents, payments } from "@/server/db/schema";
 
+/** Payments count as money in, refunds as money out. */
+const netAmount = sql`case when ${payments.kind} = 'refund' then -${payments.amount} else ${payments.amount} end`;
+
 export interface DashboardMetrics {
   totalRevenue: number;
   outstanding: number;
@@ -22,7 +25,7 @@ export async function getDashboardMetrics(
 
   const [[revenue], [outstandingRow], [overdueRow], [clientRow]] = await Promise.all([
     db
-      .select({ value: sql<string>`coalesce(sum(${payments.amount}), 0)` })
+      .select({ value: sql<string>`coalesce(sum(${netAmount}), 0)` })
       .from(payments)
       .where(eq(payments.orgId, orgId)),
     db
@@ -80,7 +83,7 @@ export async function getRevenueSeries(
   const rows = await db
     .select({
       bucket: sql<string>`to_char(date_trunc('month', ${payments.paidAt}), 'YYYY-MM')`,
-      total: sql<string>`coalesce(sum(${payments.amount}), 0)`,
+      total: sql<string>`coalesce(sum(${netAmount}), 0)`,
     })
     .from(payments)
     .where(and(eq(payments.orgId, orgId), gte(payments.paidAt, since)))
@@ -109,7 +112,7 @@ export async function getRevenueSeriesQuarterly(
   const rows = await db
     .select({
       bucket: sql<string>`to_char(date_trunc('quarter', ${payments.paidAt}), 'YYYY-Q')`,
-      total: sql<string>`coalesce(sum(${payments.amount}), 0)`,
+      total: sql<string>`coalesce(sum(${netAmount}), 0)`,
     })
     .from(payments)
     .where(and(eq(payments.orgId, orgId), gte(payments.paidAt, since)))
@@ -180,6 +183,7 @@ export async function getUpcomingReminders(
 
 export interface PaymentRow {
   id: string;
+  kind: "payment" | "refund";
   amount: string;
   currency: string;
   method: string;
@@ -197,6 +201,7 @@ export async function listPayments(
   const q = db
     .select({
       id: payments.id,
+      kind: payments.kind,
       amount: payments.amount,
       currency: payments.currency,
       method: payments.method,

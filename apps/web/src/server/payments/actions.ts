@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { requireOrgContext } from "@/server/auth/context";
-import { deletePaymentForOrg, recordPaymentForOrg } from "@/server/payments/service";
+import { deletePaymentForOrg, recordPaymentForOrg, recordRefundForOrg } from "@/server/payments/service";
 
 // Thin web wrappers: business rules live in ./service.ts (shared with /api/v1).
 
@@ -31,6 +31,17 @@ export async function deletePayment(id: string): Promise<PaymentActionResult> {
 
   revalidatePath("/payments");
   revalidatePath(`/documents/${res.data.documentId}`);
+  revalidatePath("/dashboard");
+  return { ok: true };
+}
+
+export async function recordRefund(raw: unknown): Promise<PaymentActionResult> {
+  const ctx = await requireOrgContext();
+  const res = await recordRefundForOrg(ctx, raw);
+  if (!res.ok) return { ok: false, error: res.error, fieldErrors: res.fieldErrors };
+
+  revalidatePath("/payments");
+  revalidatePath(`/documents/${res.data.document.id}`);
   revalidatePath("/dashboard");
   return { ok: true };
 }

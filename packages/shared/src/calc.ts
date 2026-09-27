@@ -101,3 +101,13 @@ export function effectiveTotal(doc: Pick<Owable, "total" | "adjustmentTotal">): 
 export function amountOwed(doc: Owable): number {
   return Math.max(round2(effectiveTotal(doc) - toNumber(doc.amountPaid)), 0);
 }
+
+/**
+ * What the business owes the client back: anything paid above what the invoice
+ * is now worth (e.g. credited after payment). A cancelled (void) invoice is
+ * worth nothing, so everything paid on it is refundable.
+ */
+export function refundDue(doc: Owable & { status?: string }): number {
+  const worth = doc.status === "void" ? 0 : effectiveTotal(doc);
+  return Math.max(round2(toNumber(doc.amountPaid) - worth), 0);
+}

@@ -7,22 +7,35 @@ import { Badge, Button, Chip, ErrorView, Field, KeyValue, Loading, Screen, Secti
 import { Spacing } from '@/constants/theme';
 import { ApiError } from '@/lib/api';
 import { balanceOf, formatCurrency, PAYMENT_METHOD, todayIso } from '@/lib/format';
-import { useDocument, useRecordPayment, useReviewProof } from '@/lib/queries';
+import { refundDue } from '@invoicegen/shared/calc';
+
+import { useDocument, useRecordPayment, useRecordRefund, useReviewProof } from '@/lib/queries';
 
 const METHODS: PaymentMethod[] = ['bank_transfer', 'cash', 'card', 'other'];
 
 /**
  * Record a payment. Opened with `?proofId=` (plus the proof's amount, date and
  * reference), it accepts that proof instead, so the payment is linked to it.
+ * With `?refund=1` it records money paid back to the client instead.
  */
 export default function RecordPaymentScreen() {
-  const params = useLocalSearchParams<{ id: string; proofId?: string; amount?: string; paidOn?: string; reference?: string }>();
+  const params = useLocalSearchParams<{
+    id: string;
+    proofId?: string;
+    amount?: string;
+    paidOn?: string;
+    reference?: string;
+    refund?: string;
+  }>();
   const { id, proofId } = params;
+  const isRefund = params.refund === '1';
   const doc = useDocument(id);
   const record = useRecordPayment(id);
   const accept = useReviewProof(id);
+  const recordRefund = useRecordRefund(id);
 
-  const balance = doc.data ? balanceOf(doc.data.document) : 0;
+  // What can be recorded: the balance owed, or for a refund what was overpaid.
+  const balance = doc.data ? (isRefund ? refundDue(doc.data.document) : balanceOf(doc.data.document)) : 0;
   const [amount, setAmount] = useState<string | null>(null);
   const [method, setMethod] = useState<PaymentMethod>('bank_transfer');
   const [paidAt, setPaidAt] = useState(params.paidOn || todayIso());
@@ -42,12 +55,14 @@ export default function RecordPaymentScreen() {
   const suggested = params.amount ? Math.min(Number(params.amount), balance) : balance;
   const amountText = amount ?? suggested.toFixed(2);
   const parsedAmount = Number(amountText.replace(',', '.'));
-  const mutation = proofId ? accept : record;
+  const mutation = isRefund ? recordRefund : proofId ? accept : record;
   const fieldErrors = mutation.error instanceof ApiError ? mutation.error.fieldErrors : undefined;
 
   function submit() {
     const common = { amount: parsedAmount, method, paidAt, reference: reference.trim() || undefined };
-    if (proofId) {
+    if (isRefund) {
+      recordRefund.mutate(common, { onSuccess: () => router.back() });
+    } else if (proofId) {
       accept.mutate({ id: proofId, action: 'accept', ...common }, { onSuccess: () => router.back() });
     } else {
       record.mutate({ documentId: id, ...common }, { onSuccess: () => router.back() });
@@ -58,16 +73,20 @@ export default function RecordPaymentScreen() {
     <Screen
       footer={
         <Button
-          label={`Record ${Number.isFinite(parsedAmount) && parsedAmount > 0 ? formatCurrency(parsedAmount, d.currency) : 'payment'}`}
+          label={`${isRefund ? 'Refund' : 'Record'} ${Number.isFinite(parsedAmount) && parsedAmount > 0 ? formatCurrency(parsedAmount, d.currency) : isRefund ? '' : 'payment'}`.trim()}
           onPress={submit}
           loading={mutation.isPending}
           disabled={!(parsedAmount > 0)}
         />
       }>
-      {proofId ? <Stack.Screen options={{ title: 'Check proof and record' }} /> : null}
+      {isRefund ? (
+        <Stack.Screen options={{ title: 'Record refund' }} />
+      ) : proofId ? (
+        <Stack.Screen options={{ title: 'Check proof and record' }} />
+      ) : null}
       <View style={{ gap: Spacing.one }}>
         <T variant="heading">{d.number}</T>
-        <KeyValue label="Balance due" value={formatCurrency(balance, d.currency)} strong />
+        <KeyValue label={isRefund ? 'Refund due' : 'Balance due'} value={formatCurrency(balance, d.currency)} strong />
         {proofId ? (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.two }}>
             <Badge label="Proof attached" tone="success" />
@@ -85,10 +104,10 @@ export default function RecordPaymentScreen() {
         keyboardType="decimal-pad"
         selectTextOnFocus
         error={fieldErrors?.amount?.[0]}
-        hint="Change this for a part-payment."
+        hint={isRefund ? 'Change this for a part-refund.' : 'Change this for a part-payment.'}
       />
 
-      <Section title="How were you paid?">
+      <Section title={isRefund ? 'How did you pay it back?' : 'How were you paid?'}>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two }}>
           {METHODS.map((m) => (
             <Chip key={m} label={PAYMENT_METHOD[m]} selected={method === m} onPress={() => setMethod(m)} />
@@ -97,7 +116,7 @@ export default function RecordPaymentScreen() {
       </Section>
 
       <Field
-        label="Date paid"
+        label={isRefund ? 'Date refunded' : 'Date paid'}
         value={paidAt}
         onChangeText={setPaidAt}
         placeholder="YYYY-MM-DD"

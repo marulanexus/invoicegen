@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { amountOwed, effectiveTotal } from "@invoicegen/shared/calc";
+import { amountOwed, effectiveTotal, refundDue as refundDueOf } from "@invoicegen/shared/calc";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 
@@ -10,6 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import { DocumentPreview } from "@/components/documents/document-preview";
 import { DocumentDetailActions } from "@/components/documents/document-detail-actions";
 import { RecordPaymentDialog } from "@/components/payments/record-payment-dialog";
+import { RecordRefundDialog } from "@/components/payments/record-refund-dialog";
 import { RecurringDialog } from "@/components/documents/recurring-dialog";
 import { CopyLink } from "@/components/documents/copy-link";
 import { WhatsAppShare } from "@/components/documents/whatsapp-share";
@@ -51,8 +52,8 @@ export default async function DocumentDetailPage({
   const locked = note || isLockedTaxInvoice(doc);
   const adjusted = Number(doc.adjustmentTotal) !== 0;
   const canIssueNotes = doc.type === "invoice" && doc.status !== "draft" && doc.status !== "void";
-  // Paid more than the invoice is now worth (e.g. credited after payment).
-  const refundDue = !note ? Math.round((Number(doc.amountPaid) - effectiveTotal(doc)) * 100) / 100 : 0;
+  // Paid more than the invoice is now worth (credited after payment, or cancelled).
+  const refundDue = doc.type === "invoice" ? refundDueOf(doc) : 0;
   const backHref = note && full.related ? `/documents/${full.related.id}` : note ? "/invoices" : `/${doc.type}s`;
   const backLabel = note && full.related ? `Back to ${full.related.number}` : note ? "Back to invoices" : `Back to ${doc.type}s`;
 
@@ -250,6 +251,10 @@ export default async function DocumentDetailPage({
             />
           )}
 
+          {refundDue > 0.005 && (
+            <RecordRefundDialog documentId={doc.id} refundDue={refundDue} currency={doc.currency} />
+          )}
+
           {!note && (
           <Card>
             <CardHeader>
@@ -263,9 +268,11 @@ export default async function DocumentDetailPage({
                   {payments.map((p) => (
                     <li key={p.id} className="flex items-center justify-between">
                       <span className="text-muted-foreground">
-                        {formatDate(p.paidAt)} · {p.method.replace("_", " ")}
+                        {formatDate(p.paidAt)} · {p.kind === "refund" ? "Refund, " : ""}
+                        {p.method.replace("_", " ")}
                       </span>
                       <span className="font-medium">
+                        {p.kind === "refund" ? "−" : ""}
                         {formatCurrency(p.amount, p.currency)}
                       </span>
                     </li>

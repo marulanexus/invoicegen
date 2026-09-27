@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { Document } from "@/server/db/schema";
-import { balanceOf, paymentProblem, statusForAmountPaid } from "./rules";
+import { balanceOf, paymentProblem, refundProblem, statusAfterPaymentRemoved, statusForAmountPaid } from "./rules";
 
 const invoice = (over: Partial<Document> = {}) =>
   ({
@@ -63,5 +63,42 @@ describe("with credit and debit notes", () => {
     expect(paymentProblem(invoice({ adjustmentTotal: "-150.00" }), 1000.01)?.code).toBe("validation");
     expect(statusForAmountPaid(invoice({ adjustmentTotal: "-150.00" }), 1000)).toEqual({ status: "paid", fullyPaid: true });
     expect(balanceOf(invoice({ adjustmentTotal: "115.00" }))).toBe(1265);
+  });
+});
+
+describe("refundProblem", () => {
+  const credited = invoice({ status: "paid", amountPaid: "1150.00", adjustmentTotal: "-230.00" });
+
+  it("allows refunding up to what was overpaid", () => {
+    expect(refundProblem(credited, 230)).toBeNull();
+    expect(refundProblem(credited, 100)).toBeNull();
+    expect(refundProblem(credited, 231)?.code).toBe("validation");
+  });
+
+  it("allows refunding everything paid on a cancelled invoice", () => {
+    const cancelled = invoice({ status: "void", amountPaid: "1150.00", adjustmentTotal: "-1150.00" });
+    expect(refundProblem(cancelled, 1150)).toBeNull();
+  });
+
+  it("refuses when nothing was overpaid", () => {
+    expect(refundProblem(invoice({ status: "paid", amountPaid: "1150.00" }), 10)?.code).toBe("conflict");
+    expect(refundProblem(invoice({ status: "partial", amountPaid: "500.00", adjustmentTotal: "-230.00" }), 10)?.code).toBe("conflict");
+  });
+
+  it("only applies to invoices", () => {
+    expect(refundProblem(invoice({ type: "quote", amountPaid: "1150.00", adjustmentTotal: "-230.00" }), 10)?.code).toBe("conflict");
+  });
+});
+
+describe("statusAfterPaymentRemoved", () => {
+  it("keeps a cancelled invoice cancelled", () => {
+    expect(statusAfterPaymentRemoved(invoice({ status: "void" }), 0)).toBe("void");
+  });
+
+  it("follows what's left against the credited total", () => {
+    const doc = invoice({ status: "paid", adjustmentTotal: "-230.00" });
+    expect(statusAfterPaymentRemoved(doc, 920)).toBe("paid");
+    expect(statusAfterPaymentRemoved(doc, 500)).toBe("partial");
+    expect(statusAfterPaymentRemoved(doc, 0)).toBe("sent");
   });
 });

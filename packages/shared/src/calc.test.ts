@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { amountOwed, calcLine, calcDocumentTotals, balanceDue, effectiveTotal } from "./calc";
+import { amountOwed, calcLine, calcDocumentTotals, balanceDue, effectiveTotal, refundDue } from "./calc";
 
 describe("calcLine", () => {
   it("computes a simple line with no discount or tax", () => {
@@ -137,5 +137,21 @@ describe("effectiveTotal / amountOwed", () => {
   it("treats a missing adjustment as zero and never goes negative", () => {
     expect(amountOwed({ total: "100", amountPaid: "40" })).toBe(60);
     expect(amountOwed({ total: "100", amountPaid: "100", adjustmentTotal: "-50" })).toBe(0);
+  });
+});
+
+describe("refundDue", () => {
+  it("is what was paid above the credited total", () => {
+    expect(refundDue({ total: "1150.00", amountPaid: "1150.00", adjustmentTotal: "-230.00", status: "paid" })).toBe(230);
+    expect(refundDue({ total: "1150.00", amountPaid: "500.00", adjustmentTotal: "-230.00", status: "partial" })).toBe(0);
+  });
+
+  it("is everything paid on a void invoice", () => {
+    expect(refundDue({ total: "1150.00", amountPaid: "1150.00", adjustmentTotal: "-1150.00", status: "void" })).toBe(1150);
+    expect(refundDue({ total: "1150.00", amountPaid: "400.00", status: "void" })).toBe(400);
+  });
+
+  it("is zero once refunded", () => {
+    expect(refundDue({ total: "1150.00", amountPaid: "920.00", adjustmentTotal: "-230.00", status: "paid" })).toBe(0);
   });
 });

@@ -17,6 +17,7 @@ import type {
   NoteInput,
   Payment,
   PaymentInput,
+  RefundInput,
   PaymentMethod,
   PaymentProof,
   PaymentListItem,
@@ -146,6 +147,8 @@ export function useApi() {
     payments: (limit = 50) => call<PaymentListItem[]>('GET', `/payments${query({ limit })}`),
     recordPayment: (input: PaymentInput) =>
       call<{ payment: Payment; document: Document }>('POST', '/payments', input),
+    recordRefund: (documentId: string, input: RefundInput) =>
+      call<{ payment: Payment; document: Document }>('POST', `/documents/${documentId}/refunds`, input),
 
     /** Download the PDF to the cache (for the share sheet). Returns its file URI. */
     downloadPdf: async (id: string, number: string): Promise<string> => {

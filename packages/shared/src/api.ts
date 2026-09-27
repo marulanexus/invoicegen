@@ -163,9 +163,13 @@ export interface LineItem {
   amount: string;
 }
 
+/** Money in from the client, or money paid back to them. Amounts are always positive. */
+export type PaymentKind = "payment" | "refund";
+
 export interface Payment {
   id: string;
   documentId: string;
+  kind: PaymentKind;
   amount: string;
   currency: string;
   method: PaymentMethod;
@@ -255,8 +259,12 @@ export interface PaymentInput {
   notes?: string;
 }
 
+/** Body for POST /documents/:id/refunds. */
+export type RefundInput = Omit<PaymentInput, "documentId">;
+
 export interface PaymentListItem {
   id: string;
+  kind: PaymentKind;
   amount: string;
   currency: string;
   method: PaymentMethod;

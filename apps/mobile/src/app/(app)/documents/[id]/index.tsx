@@ -1,5 +1,6 @@
 import type { FullDocument, PaymentProof, StatusAction } from '@invoicegen/shared/api';
 import * as WebBrowser from 'expo-web-browser';
+import { refundDue } from '@invoicegen/shared/calc';
 import { shareMessage } from '@invoicegen/shared/whatsapp';
 import * as Sharing from 'expo-sharing';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
@@ -67,6 +68,8 @@ export default function DocumentScreen() {
   const money = (v: string | number) => formatCurrency(v, d.currency);
   const business = me.data?.business?.displayName ?? '';
   const canTakePayment = d.type === 'invoice' && balance > 0 && d.status !== 'void';
+  // Paid more than the invoice is now worth (credited after payment, or cancelled).
+  const refund = d.type === 'invoice' ? refundDue(d) : 0;
 
   async function shareOnWhatsApp() {
     setBusy('whatsapp');
@@ -216,6 +219,7 @@ export default function DocumentScreen() {
               ) : null}
               <KeyValue label="Paid" value={money(d.amountPaid)} />
               <KeyValue label="Balance due" value={money(balance)} strong />
+              {refund > 0 ? <KeyValue label="Refund due to client" value={money(refund)} strong /> : null}
               {d.dueDate ? <KeyValue label="Due" value={formatDate(d.dueDate)} /> : null}
             </View>
           ) : d.validUntil ? (
@@ -249,6 +253,9 @@ export default function DocumentScreen() {
           <Button label="Share on WhatsApp" onPress={shareOnWhatsApp} loading={busy === 'whatsapp'} disabled={busy !== null} />
           {canTakePayment ? (
             <Button label="Record a payment" variant="secondary" onPress={() => router.push(`/documents/${id}/payment`)} />
+          ) : null}
+          {refund > 0 ? (
+            <Button label="Record a refund" variant="secondary" onPress={() => router.push(`/documents/${id}/payment?refund=1`)} />
           ) : null}
           {d.type === 'quote' && d.status !== 'declined' && d.status !== 'void' ? (
             <Button label="Convert to invoice" variant="secondary" onPress={convertToInvoice} loading={convert.isPending} />
@@ -360,8 +367,10 @@ export default function DocumentScreen() {
               {payments.map((p) => (
                 <Row
                   key={p.id}
-                  title={money(p.amount)}
-                  subtitle={[PAYMENT_METHOD[p.method], formatDate(p.paidAt), p.reference].filter(Boolean).join(' · ')}
+                  title={p.kind === 'refund' ? `−${money(p.amount)}` : money(p.amount)}
+                  subtitle={[p.kind === 'refund' ? 'Refund' : null, PAYMENT_METHOD[p.method], formatDate(p.paidAt), p.reference]
+                    .filter(Boolean)
+                    .join(' · ')}
                 />
               ))}
             </List>

@@ -43,7 +43,12 @@ export default async function PaymentsPage() {
     }))
     .filter((d) => d.balance > 0.001);
 
-  const totalReceived = paymentsList.reduce((s, p) => s + Number(p.amount), 0);
+  // Refunds are money out.
+  const totalReceived = paymentsList.reduce(
+    (s, p) => s + (p.kind === "refund" ? -Number(p.amount) : Number(p.amount)),
+    0
+  );
+  const refundCount = paymentsList.filter((p) => p.kind === "refund").length;
 
   return (
     <div>
@@ -65,14 +70,15 @@ export default async function PaymentsPage() {
         <Card className="overflow-hidden">
           <div className="flex items-center justify-between border-b px-4 py-3 text-sm">
             <span className="text-muted-foreground">
-              {paymentsList.length} payments
+              {paymentsList.length - refundCount} payments
+              {refundCount > 0 && `, ${refundCount} refund${refundCount === 1 ? "" : "s"}`}
             </span>
             <span className="font-medium">
               {formatCurrency(
                 totalReceived,
                 ctx.profile?.defaultCurrency ?? "USD"
               )}{" "}
-              received
+              {refundCount > 0 ? "net received" : "received"}
             </span>
           </div>
           <Table>
@@ -103,9 +109,11 @@ export default async function PaymentsPage() {
                     {p.clientName ?? "—"}
                   </TableCell>
                   <TableCell className="hidden capitalize text-muted-foreground md:table-cell">
+                    {p.kind === "refund" ? "Refund, " : ""}
                     {p.method.replace("_", " ")}
                   </TableCell>
                   <TableCell className="text-right font-medium">
+                    {p.kind === "refund" ? "−" : ""}
                     {formatCurrency(p.amount, p.currency)}
                   </TableCell>
                 </TableRow>

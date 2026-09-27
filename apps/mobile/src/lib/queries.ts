@@ -6,6 +6,7 @@ import type {
   DocumentType,
   NoteInput,
   PaymentInput,
+  RefundInput,
   PaymentMethod,
   StatusAction,
 } from '@invoicegen/shared/api';
@@ -145,6 +146,15 @@ export function useRecordPayment(documentId: string) {
   const invalidate = useInvalidateMoney();
   return useMutation({
     mutationFn: (input: PaymentInput) => api.recordPayment(input),
+    onSuccess: () => invalidate(documentId),
+  });
+}
+
+export function useRecordRefund(documentId: string) {
+  const api = useApi();
+  const invalidate = useInvalidateMoney();
+  return useMutation({
+    mutationFn: (input: RefundInput) => api.recordRefund(documentId, input),
     onSuccess: () => invalidate(documentId),
   });
 }

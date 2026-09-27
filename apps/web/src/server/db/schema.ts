@@ -71,6 +71,9 @@ export const paymentMethodEnum = pgEnum("payment_method", [
 ]);
 
 /** Online payment providers a business can connect to take invoice payments. */
+/** Money in (a payment) or money out (a refund to the client). Amounts are always positive. */
+export const paymentKindEnum = pgEnum("payment_kind", ["payment", "refund"]);
+
 export const gatewayProviderEnum = pgEnum("gateway_provider", ["payfast", "yoco"]);
 
 export const proofStatusEnum = pgEnum("proof_status", ["pending", "accepted", "rejected"]);
@@ -368,6 +371,7 @@ export const payments = pgTable("payments", {
   }),
   amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
   currency: text("currency").notNull().default("USD"),
+  kind: paymentKindEnum("kind").notNull().default("payment"),
   method: paymentMethodEnum("method").notNull().default("bank_transfer"),
   reference: text("reference"),
   notes: text("notes"),
