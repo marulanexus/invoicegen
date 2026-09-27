@@ -22,7 +22,7 @@ import { prepareIssue } from "@/server/documents/tax-invoice";
 import { toMoneyString } from "@/lib/money";
 import { env } from "@/lib/env";
 import { documentSchema, type DocumentInput, type LineItemInput } from "@/lib/validators";
-import { addDays, statusActionBlocked, type StatusAction } from "@/server/documents/rules";
+import { addDays, lockReason, statusActionBlocked, type StatusAction } from "@/server/documents/rules";
 import { settleBalanceInTx } from "@/server/payments/service";
 
 export { STATUS_ACTIONS, withProfileDefaults, type StatusAction } from "@/server/documents/rules";
@@ -150,13 +150,16 @@ export async function updateDocumentForOrg(
   const lookup = await resolveClient(ctx.org.id, d.clientId);
   if (!lookup.ok) return lookup.result;
 
-  const doc = await db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
     const [existing] = await tx
       .select()
       .from(documents)
       .where(and(eq(documents.id, id), eq(documents.orgId, ctx.org.id)))
-      .limit(1);
-    if (!existing) return null;
+      .limit(1)
+      .for("update");
+    if (!existing) return fail("not_found", "Document not found.");
+    const locked = lockReason(existing, "edit");
+    if (locked) return fail("conflict", locked);
 
     const [row] = await tx
       .update(documents)
@@ -172,11 +175,10 @@ export async function updateDocumentForOrg(
     // Replace line items wholesale (simplest correct strategy).
     await tx.delete(lineItems).where(eq(lineItems.documentId, id));
     await tx.insert(lineItems).values(lineItemRows(id, d.lineItems));
-    return row;
+    return ok(row);
   });
 
-  if (!doc) return fail("not_found", "Document not found.");
-  return ok(doc);
+  return result;
 }
 
 export async function changeDocumentStatusForOrg(
@@ -207,6 +209,8 @@ export async function changeDocumentStatusForOrg(
       .for("update");
     if (!doc) return fail("not_found", "Document not found.");
 
+    const locked = lockReason(doc, action === "reopen" || action === "void" ? action : "status");
+    if (locked) return fail("conflict", locked);
     const blocked = statusActionBlocked(doc, action);
     if (blocked) return fail("conflict", blocked);
 
@@ -257,10 +261,19 @@ export async function deleteDocumentForOrg(
   ctx: OrgContext,
   id: string
 ): Promise<ServiceResult<Document>> {
-  const [doc] = await db
-    .delete(documents)
-    .where(and(eq(documents.id, id), eq(documents.orgId, ctx.org.id)))
-    .returning();
+  const scope = and(eq(documents.id, id), eq(documents.orgId, ctx.org.id));
+  const [existing] = await db.select().from(documents).where(scope).limit(1);
+  if (!existing) return fail("not_found", "Document not found.");
+  const locked = lockReason(existing, "delete");
+  if (locked) return fail("conflict", locked);
+  const [hasNote] = await db
+    .select({ id: documents.id })
+    .from(documents)
+    .where(and(eq(documents.relatedDocumentId, id), eq(documents.orgId, ctx.org.id)))
+    .limit(1);
+  if (hasNote) return fail("conflict", "This invoice has credit or debit notes, so it can't be deleted.");
+
+  const [doc] = await db.delete(documents).where(scope).returning();
   if (!doc) return fail("not_found", "Document not found.");
   return ok(doc);
 }

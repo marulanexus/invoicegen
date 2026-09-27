@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { amountOwed } from "@invoicegen/shared/calc";
 import {
   addMonths,
   eachDayOfInterval,
@@ -62,7 +63,7 @@ export default async function CalendarPage({
         id: inv.id,
         date: d,
         label: `${inv.number} due`,
-        amount: formatCurrency(Number(inv.total) - Number(inv.amountPaid), inv.currency),
+        amount: formatCurrency(amountOwed(inv), inv.currency),
         kind: "due",
       });
     }

@@ -51,6 +51,7 @@ export default function AppLayout() {
       <Stack.Screen name="documents/new" options={{ title: 'New document', presentation: 'modal' }} />
       <Stack.Screen name="documents/[id]/index" options={{ title: '' }} />
       <Stack.Screen name="documents/[id]/payment" options={{ title: 'Record payment', presentation: 'modal' }} />
+      <Stack.Screen name="documents/[id]/note" options={{ title: 'Issue note', presentation: 'modal' }} />
       <Stack.Screen name="clients/new" options={{ title: 'New client', presentation: 'modal' }} />
       <Stack.Screen name="clients/[id]" options={{ title: '' }} />
     </Stack>

@@ -17,6 +17,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
+import type { Document } from "@/server/db/schema";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -36,13 +37,18 @@ export function DocumentActions({
   id,
   type,
   status,
+  locked = false,
   onSend,
 }: {
   id: string;
-  type: "invoice" | "quote" | "receipt";
+  type: Document["type"];
   status: string;
+  /** Issued SA tax invoice: no edit/reopen/void/delete (use credit/debit notes). */
+  locked?: boolean;
   onSend?: () => void;
 }) {
+  const isNote = type === "credit_note" || type === "debit_note";
+  const listHref = isNote ? "/invoices" : `/${type}s`;
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
@@ -80,13 +86,13 @@ export function DocumentActions({
         return;
       }
       toast.success("Document deleted");
-      router.push(`/${type}s`);
+      router.push(listHref);
       router.refresh();
     });
   }
 
   const isPaid = status === "paid";
-  const canMarkPaid = type !== "quote" && !isPaid && status !== "void";
+  const canMarkPaid = type !== "quote" && !isNote && !isPaid && status !== "void";
 
   return (
     <div className="flex items-center gap-2">
@@ -102,6 +108,8 @@ export function DocumentActions({
         </Button>
       )}
 
+      {/* Issued notes are final: only PDF and send. */}
+      {!isNote && (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="outline" size="icon" disabled={pending} aria-label="More actions">
@@ -109,9 +117,11 @@ export function DocumentActions({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-48">
-          <DropdownMenuItem onClick={() => router.push(`/documents/${id}/edit`)}>
-            <Pencil className="h-4 w-4" /> Edit
-          </DropdownMenuItem>
+          {!locked && (
+            <DropdownMenuItem onClick={() => router.push(`/documents/${id}/edit`)}>
+              <Pencil className="h-4 w-4" /> Edit
+            </DropdownMenuItem>
+          )}
 
           {status === "draft" && (
             <DropdownMenuItem onClick={() => run("send", "Marked as sent")}>
@@ -136,25 +146,30 @@ export function DocumentActions({
               </DropdownMenuItem>
             </>
           )}
-          {status !== "draft" && (
+          {status !== "draft" && !locked && (
             <DropdownMenuItem onClick={() => run("reopen", "Reopened as draft")}>
               <RotateCcw className="h-4 w-4" /> Reopen as draft
             </DropdownMenuItem>
           )}
-          {status !== "void" && (
+          {status !== "void" && !locked && (
             <DropdownMenuItem onClick={() => run("void", "Voided")}>
               <CircleSlash className="h-4 w-4" /> Void
             </DropdownMenuItem>
           )}
 
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={remove} className="text-destructive focus:text-destructive">
-            <Trash2 className="h-4 w-4" /> Delete
-          </DropdownMenuItem>
+          {!locked && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={remove} className="text-destructive focus:text-destructive">
+                <Trash2 className="h-4 w-4" /> Delete
+              </DropdownMenuItem>
+            </>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
+      )}
 
-      <Link href={`/${type}s`} className="sr-only">
+      <Link href={listHref} className="sr-only">
         Back to list
       </Link>
     </div>

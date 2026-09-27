@@ -27,6 +27,7 @@ export async function GET(
 
   const view = viewFromStored(full.document, full.items, {
     showPoweredBy: !ctx.plan.features.customBranding,
+    related: full.related,
   });
   const pdf = await renderDocumentPdf(view);
 

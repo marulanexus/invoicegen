@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { amountOwed } from "@invoicegen/shared/calc";
 import { and, eq, inArray, isNotNull, lt } from "drizzle-orm";
 import { differenceInCalendarDays } from "date-fns";
 
@@ -10,7 +11,6 @@ import {
 } from "@/server/db/schema";
 import { getPlan } from "@/lib/plans";
 import { env } from "@/lib/env";
-import { balanceDue } from "@/lib/calc";
 import { notifyOverdue } from "@/server/notifications/events";
 
 export const runtime = "nodejs";
@@ -63,6 +63,7 @@ export async function GET(req: Request) {
       number: documents.number,
       total: documents.total,
       amountPaid: documents.amountPaid,
+      adjustmentTotal: documents.adjustmentTotal,
       currency: documents.currency,
       billTo: documents.billToSnapshot,
     });
@@ -76,7 +77,7 @@ export async function GET(req: Request) {
       invoices.map((i) => ({
         documentId: i.id,
         number: i.number,
-        balance: balanceDue(i.total, i.amountPaid),
+        balance: amountOwed(i),
         currency: i.currency,
         clientName: typeof i.billTo?.name === "string" ? (i.billTo.name as string) : null,
       }))
@@ -147,6 +148,7 @@ export async function GET(req: Request) {
 
       const view = viewFromStored(full.document, full.items, {
         showPoweredBy: !getPlan(org.plan).features.customBranding,
+        related: full.related,
       });
       const pdf = await renderDocumentPdf(view);
       const html = buildDocumentEmail({

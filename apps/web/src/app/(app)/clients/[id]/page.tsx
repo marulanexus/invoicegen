@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { amountOwed } from "@invoicegen/shared/calc";
 import { notFound } from "next/navigation";
 import {
   Building2,
@@ -43,7 +44,7 @@ export default async function ClientDetailPage({
         d.type === "invoice" &&
         ["sent", "viewed", "partial", "overdue"].includes(d.status)
     )
-    .reduce((sum, d) => sum + (Number(d.total) - Number(d.amountPaid)), 0);
+    .reduce((sum, d) => sum + amountOwed(d), 0);
   const totalPaid = docs.reduce((sum, d) => sum + Number(d.amountPaid), 0);
 
   const addr = [

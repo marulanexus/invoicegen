@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { calcLine, calcDocumentTotals, balanceDue } from "./calc";
+import { amountOwed, calcLine, calcDocumentTotals, balanceDue, effectiveTotal } from "./calc";
 
 describe("calcLine", () => {
   it("computes a simple line with no discount or tax", () => {
@@ -124,5 +124,18 @@ describe("balanceDue", () => {
 
   it("can go negative when overpaid", () => {
     expect(balanceDue(10, 25)).toBe(-15);
+  });
+});
+
+describe("effectiveTotal / amountOwed", () => {
+  it("applies credit and debit notes to what's owed", () => {
+    expect(effectiveTotal({ total: "1150.00", adjustmentTotal: "-230.00" })).toBe(920);
+    expect(amountOwed({ total: "1150.00", amountPaid: "500.00", adjustmentTotal: "-230.00" })).toBe(420);
+    expect(amountOwed({ total: "1150.00", amountPaid: "0", adjustmentTotal: "115.00" })).toBe(1265);
+  });
+
+  it("treats a missing adjustment as zero and never goes negative", () => {
+    expect(amountOwed({ total: "100", amountPaid: "40" })).toBe(60);
+    expect(amountOwed({ total: "100", amountPaid: "100", adjustmentTotal: "-50" })).toBe(0);
   });
 });

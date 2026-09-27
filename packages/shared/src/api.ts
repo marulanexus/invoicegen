@@ -25,7 +25,7 @@ export type ApiErrorBody = {
   };
 };
 
-export type DocumentType = "invoice" | "quote" | "receipt";
+export type DocumentType = "invoice" | "quote" | "receipt" | "credit_note" | "debit_note";
 
 export type DocumentStatus =
   | "draft"
@@ -136,6 +136,11 @@ export interface Document {
   taxTotal: string;
   total: string;
   amountPaid: string;
+  /** Invoices: debit notes minus credit notes. Owed = total + adjustmentTotal − amountPaid. */
+  adjustmentTotal: string;
+  /** Credit/debit notes: the invoice they adjust, and why. */
+  relatedDocumentId: string | null;
+  reason: string | null;
   billToSnapshot: { name?: string; email?: string | null; [k: string]: unknown } | null;
   sentAt: string | null;
   paidAt: string | null;
@@ -179,7 +184,24 @@ export interface FullDocument {
     heading: string;
     vatRegistered: boolean;
     problems: import("./tax-invoice").TaxInvoiceProblem[];
+    /** Issued tax invoice or note: edit/reopen/void/delete are refused; use notes. */
+    locked: boolean;
   };
+  /** Credit/debit notes: the invoice they adjust. */
+  related: { id: string; number: string; type: DocumentType; issueDate: string | null } | null;
+  /** Invoices: credit/debit notes issued against it, oldest first. */
+  notes: Document[];
+}
+
+/** Body for POST /documents/:id/notes. Amounts include VAT. */
+export interface NoteInput {
+  kind: "credit" | "debit";
+  reason: string;
+  mode?: "full" | "amount";
+  amount?: number;
+  description?: string;
+  taxRate?: number;
+  issueDate?: string;
 }
 
 export interface LineItemInput {

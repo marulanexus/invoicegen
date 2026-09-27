@@ -41,6 +41,5 @@ export function todayIso(): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-export function balanceOf(doc: { total: string; amountPaid: string }): number {
-  return Math.max(Math.round((Number(doc.total) - Number(doc.amountPaid)) * 100) / 100, 0);
-}
+/** What's owed: total + credit/debit note adjustments − paid (never below 0). */
+export { amountOwed as balanceOf } from '@invoicegen/shared/calc';

@@ -48,7 +48,7 @@ export async function listClients(
       clientId: documents.clientId,
       documentCount: sql<number>`count(*)::int`,
       totalPaid: sql<string>`coalesce(sum(${documents.amountPaid}), 0)`,
-      outstanding: sql<string>`coalesce(sum(case when ${documents.type} = 'invoice' and ${documents.status} in ('sent','viewed','partial','overdue') then ${documents.total} - ${documents.amountPaid} else 0 end), 0)`,
+      outstanding: sql<string>`coalesce(sum(case when ${documents.type} = 'invoice' and ${documents.status} in ('sent','viewed','partial','overdue') then ${documents.total} + ${documents.adjustmentTotal} - ${documents.amountPaid} else 0 end), 0)`,
     })
     .from(documents)
     .where(eq(documents.orgId, orgId))

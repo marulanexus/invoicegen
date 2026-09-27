@@ -4,6 +4,7 @@ import type {
   DocumentCreateInput,
   DocumentStatus,
   DocumentType,
+  NoteInput,
   PaymentInput,
   StatusAction,
 } from '@invoicegen/shared/api';
@@ -99,6 +100,15 @@ export function useConvertQuote(id: string) {
   return useMutation({
     mutationFn: () => api.convertQuote(id),
     onSuccess: () => invalidate(id),
+  });
+}
+
+export function useIssueNote(invoiceId: string) {
+  const api = useApi();
+  const invalidate = useInvalidateMoney();
+  return useMutation({
+    mutationFn: (input: NoteInput) => api.issueNote(invoiceId, input),
+    onSuccess: () => invalidate(invoiceId),
   });
 }
 

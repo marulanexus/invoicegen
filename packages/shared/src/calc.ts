@@ -84,3 +84,20 @@ export function calcDocumentTotals(
 export function balanceDue(total: number | string, amountPaid: number | string) {
   return round2(toNumber(total) - toNumber(amountPaid));
 }
+
+type Owable = {
+  total: number | string;
+  amountPaid: number | string;
+  /** Debit notes minus credit notes issued against the invoice. */
+  adjustmentTotal?: number | string | null;
+};
+
+/** The invoice amount after credit and debit notes (the issued total never changes). */
+export function effectiveTotal(doc: Pick<Owable, "total" | "adjustmentTotal">): number {
+  return round2(toNumber(doc.total) + toNumber(doc.adjustmentTotal));
+}
+
+/** What the client still owes: total + adjustments − paid, never below zero. */
+export function amountOwed(doc: Owable): number {
+  return Math.max(round2(effectiveTotal(doc) - toNumber(doc.amountPaid)), 0);
+}

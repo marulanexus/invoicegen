@@ -14,6 +14,7 @@ import type {
   DocumentType,
   FullDocument,
   Me,
+  NoteInput,
   Payment,
   PaymentInput,
   PaymentListItem,
@@ -99,6 +100,8 @@ export function useApi() {
       call<{ recipient: string }>('POST', `/documents/${id}/send`, input),
     shareLink: (id: string) => call<{ url: string }>('POST', `/documents/${id}/share`),
     convertQuote: (id: string) => call<Document>('POST', `/documents/${id}/convert`),
+    issueNote: (id: string, input: NoteInput) =>
+      call<{ note: Document; invoice: Document }>('POST', `/documents/${id}/notes`, input),
 
     registerDevice: (input: { token: string; platform: 'ios' | 'android' }) =>
       call<{ registered: true }>('POST', '/devices', input),

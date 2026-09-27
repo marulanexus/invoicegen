@@ -20,6 +20,7 @@ import {
   timestamp,
   index,
   uniqueIndex,
+  type AnyPgColumn,
   uuid,
 } from "drizzle-orm/pg-core";
 
@@ -39,6 +40,10 @@ export const documentTypeEnum = pgEnum("document_type", [
   "invoice",
   "quote",
   "receipt",
+  /** Reduces an issued invoice (VAT Act s21(3)(a)). */
+  "credit_note",
+  /** Increases an issued invoice (VAT Act s21(3)(b)). */
+  "debit_note",
 ]);
 
 /** Superset of statuses across all document types. */
@@ -156,6 +161,10 @@ export const businessProfiles = pgTable("business_profiles", {
   invoiceCounter: integer("invoice_counter").notNull().default(1),
   quoteCounter: integer("quote_counter").notNull().default(1),
   receiptCounter: integer("receipt_counter").notNull().default(1),
+  creditNotePrefix: text("credit_note_prefix").notNull().default("CN-"),
+  creditNoteCounter: integer("credit_note_counter").notNull().default(1),
+  debitNotePrefix: text("debit_note_prefix").notNull().default("DN-"),
+  debitNoteCounter: integer("debit_note_counter").notNull().default(1),
   numberPadding: integer("number_padding").notNull().default(4),
 
   defaultNotes: text("default_notes"),
@@ -272,6 +281,20 @@ export const documents = pgTable(
     amountPaid: numeric("amount_paid", { precision: 14, scale: 2 })
       .notNull()
       .default("0"),
+    /**
+     * Invoices only: debit notes minus credit notes issued against it. What's
+     * owed is total + adjustmentTotal − amountPaid; `total` never changes
+     * once issued (see server/documents/notes.ts).
+     */
+    adjustmentTotal: numeric("adjustment_total", { precision: 14, scale: 2 })
+      .notNull()
+      .default("0"),
+    /** Credit/debit notes: the invoice they adjust. */
+    relatedDocumentId: uuid("related_document_id").references((): AnyPgColumn => documents.id, {
+      onDelete: "restrict",
+    }),
+    /** Credit/debit notes: why it was issued (s21(3)(a)(vi)). */
+    reason: text("reason"),
 
     taxLabel: text("tax_label").default("Tax"),
     taxInclusive: boolean("tax_inclusive").notNull().default(false),

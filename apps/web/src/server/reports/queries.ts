@@ -3,6 +3,8 @@ import "server-only";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { differenceInCalendarDays } from "date-fns";
 
+import { amountOwed } from "@invoicegen/shared/calc";
+
 import { db } from "@/server/db";
 import { clients, documents } from "@/server/db/schema";
 
@@ -94,6 +96,7 @@ export async function invoiceAging(orgId: string): Promise<InvoiceAgingRow[]> {
       id: documents.id,
       total: documents.total,
       amountPaid: documents.amountPaid,
+      adjustmentTotal: documents.adjustmentTotal,
       dueDate: documents.dueDate,
     })
     .from(documents)
@@ -115,7 +118,7 @@ export async function invoiceAging(orgId: string): Promise<InvoiceAgingRow[]> {
   const today = new Date();
 
   for (const row of rows) {
-    const outstanding = Number(row.total) - Number(row.amountPaid);
+    const outstanding = amountOwed(row);
     if (outstanding <= 0) continue;
 
     // No due date or due in the future → not yet overdue.

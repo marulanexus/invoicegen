@@ -12,6 +12,7 @@ import {
   updateDocumentForOrg,
   type StatusAction,
 } from "@/server/documents/service";
+import { issueNoteForOrg } from "@/server/documents/notes";
 
 // Thin web wrappers: business rules live in ./service.ts (shared with /api/v1).
 
@@ -95,4 +96,19 @@ export async function shareDocument(
   revalidatePath("/documents");
   revalidatePath(`/documents/${id}`);
   return { ok: true, url: res.data.url };
+}
+
+/** Issue a credit or debit note against an issued invoice (VAT Act s21). */
+export async function issueNote(
+  invoiceId: string,
+  raw: unknown
+): Promise<DocumentActionResult> {
+  const ctx = await requireOrgContext();
+  const res = await issueNoteForOrg(ctx, invoiceId, raw);
+  if (!res.ok) return { ok: false, error: res.error, fieldErrors: res.fieldErrors };
+
+  revalidatePath("/invoices");
+  revalidatePath(`/documents/${invoiceId}`);
+  revalidatePath("/dashboard");
+  return { ok: true, id: res.data.note.id };
 }

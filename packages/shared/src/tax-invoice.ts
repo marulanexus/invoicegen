@@ -33,12 +33,23 @@ export function normalizeZaVatNumber(value: string | null | undefined): string |
   return /^4\d{9}$/.test(digits) ? digits : null;
 }
 
-export type DocumentKind = "invoice" | "quote" | "receipt";
+export type DocumentKind = "invoice" | "quote" | "receipt" | "credit_note" | "debit_note";
 
 /** The document heading: only VAT vendors' invoices are tax invoices. */
 export function documentHeading(type: DocumentKind, vatRegistered: boolean): string {
-  if (type === "invoice") return vatRegistered ? "TAX INVOICE" : "INVOICE";
-  return type === "quote" ? "QUOTE" : "RECEIPT";
+  switch (type) {
+    case "invoice":
+      return vatRegistered ? "TAX INVOICE" : "INVOICE";
+    case "quote":
+      return "QUOTE";
+    case "receipt":
+      return "RECEIPT";
+    // s21(3): the words "credit note" / "debit note".
+    case "credit_note":
+      return "CREDIT NOTE";
+    case "debit_note":
+      return "DEBIT NOTE";
+  }
 }
 
 export interface TaxInvoiceParty {

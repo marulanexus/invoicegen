@@ -3,6 +3,8 @@ import "server-only";
 import { and, count, desc, eq, gte, lt, lte, sql } from "drizzle-orm";
 import { addDays, subMonths, subQuarters } from "date-fns";
 
+import { amountOwed } from "@invoicegen/shared/calc";
+
 import { db } from "@/server/db";
 import { clients, documents, payments } from "@/server/db/schema";
 
@@ -25,7 +27,7 @@ export async function getDashboardMetrics(
       .where(eq(payments.orgId, orgId)),
     db
       .select({
-        value: sql<string>`coalesce(sum(${documents.total} - ${documents.amountPaid}), 0)`,
+        value: sql<string>`coalesce(sum(${documents.total} + ${documents.adjustmentTotal} - ${documents.amountPaid}), 0)`,
       })
       .from(documents)
       .where(
@@ -37,7 +39,7 @@ export async function getDashboardMetrics(
       ),
     db
       .select({
-        value: sql<string>`coalesce(sum(${documents.total} - ${documents.amountPaid}), 0)`,
+        value: sql<string>`coalesce(sum(${documents.total} + ${documents.adjustmentTotal} - ${documents.amountPaid}), 0)`,
       })
       .from(documents)
       .where(
@@ -149,6 +151,7 @@ export async function getUpcomingReminders(
       dueDate: documents.dueDate,
       total: documents.total,
       amountPaid: documents.amountPaid,
+      adjustmentTotal: documents.adjustmentTotal,
       currency: documents.currency,
     })
     .from(documents)
@@ -169,7 +172,7 @@ export async function getUpcomingReminders(
     number: r.number,
     clientName: r.clientName,
     dueDate: r.dueDate,
-    balance: Number(r.total) - Number(r.amountPaid),
+    balance: amountOwed(r),
     currency: r.currency,
     overdue: !!r.dueDate && r.dueDate < today,
   }));

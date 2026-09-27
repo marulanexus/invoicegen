@@ -50,6 +50,8 @@ describe("helpers", () => {
     expect(documentHeading("invoice", false)).toBe("INVOICE");
     expect(documentHeading("quote", true)).toBe("QUOTE");
     expect(documentHeading("receipt", true)).toBe("RECEIPT");
+    expect(documentHeading("credit_note", true)).toBe("CREDIT NOTE");
+    expect(documentHeading("debit_note", false)).toBe("DEBIT NOTE");
   });
 });
 

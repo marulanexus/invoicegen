@@ -13,6 +13,8 @@ const TITLE: Record<DocumentView["type"], string> = {
   invoice: "Invoice",
   quote: "Quote",
   receipt: "Receipt",
+  credit_note: "Credit note",
+  debit_note: "Debit note",
 };
 
 export function defaultSubject(view: DocumentView, businessName: string): string {
@@ -52,6 +54,18 @@ export const DEFAULT_EMAIL_TEMPLATES: Record<
   reminder: {
     subject: "Reminder: invoice {{number}} from {{businessName}}",
     body: "Hi {{clientName}},\n\nThis is a friendly reminder that invoice {{number}} ({{balance}} outstanding) is due {{dueDate}}.\n\nThank you,\n{{businessName}}",
+  },
+};
+
+/** Credit/debit notes use fixed wording (not editable in the template editor). */
+export const NOTE_EMAIL_TEMPLATES: Record<"credit_note" | "debit_note", { subject: string; body: string }> = {
+  credit_note: {
+    subject: "Credit note {{number}} from {{businessName}}",
+    body: "Hi {{clientName}},\n\nPlease find credit note {{number}} attached, for {{total}}. It reduces the amount on your invoice.\n\nKind regards,\n{{businessName}}",
+  },
+  debit_note: {
+    subject: "Debit note {{number}} from {{businessName}}",
+    body: "Hi {{clientName}},\n\nPlease find debit note {{number}} attached, for {{total}}. It adds to the amount on your invoice.\n\nKind regards,\n{{businessName}}",
   },
 };
 

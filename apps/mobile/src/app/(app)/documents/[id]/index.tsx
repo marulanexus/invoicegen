@@ -12,23 +12,25 @@ import { balanceOf, formatCurrency, formatDate, PAYMENT_METHOD, STATUS } from '@
 import { useChangeStatus, useConvertQuote, useDocument, useMe, useSendDocument } from '@/lib/queries';
 import { shareMessage } from '@/lib/share';
 
-const TYPE_LABEL = { invoice: 'Invoice', quote: 'Quote', receipt: 'Receipt' } as const;
+const TYPE_LABEL = { invoice: 'Invoice', quote: 'Quote', receipt: 'Receipt', credit_note: 'Credit note', debit_note: 'Debit note' } as const;
 
 function errorMessage(err: unknown): string {
   return err instanceof ApiError ? err.message : 'Something went wrong. Please try again.';
 }
 
 /** Status changes that make sense right now (mirrors the server's rules). */
-function availableActions(doc: FullDocument['document']): { action: StatusAction; label: string; destructive?: boolean }[] {
+function availableActions(doc: FullDocument['document'], locked: boolean): { action: StatusAction; label: string; destructive?: boolean }[] {
   const actions: { action: StatusAction; label: string; destructive?: boolean }[] = [];
+  // Notes are final; issued tax invoices are corrected with notes, not reopened or voided.
+  if (doc.type === 'credit_note' || doc.type === 'debit_note') return actions;
   if (doc.status === 'draft') actions.push({ action: 'send', label: 'Mark as sent' });
   if (doc.type !== 'quote' && doc.status !== 'paid' && doc.status !== 'void') actions.push({ action: 'mark_paid', label: 'Mark as paid in full' });
   if (doc.type === 'quote') {
     actions.push({ action: 'accept', label: 'Mark accepted' });
     actions.push({ action: 'decline', label: 'Mark declined' });
   }
-  if (doc.status !== 'draft') actions.push({ action: 'reopen', label: 'Reopen as draft' });
-  if (doc.status !== 'void') actions.push({ action: 'void', label: 'Void', destructive: true });
+  if (doc.status !== 'draft' && !locked) actions.push({ action: 'reopen', label: 'Reopen as draft' });
+  if (doc.status !== 'void' && !locked) actions.push({ action: 'void', label: 'Void', destructive: true });
   return actions;
 }
 
@@ -52,7 +54,10 @@ export default function DocumentScreen() {
     );
   }
 
-  const { document: d, client, items, payments, taxInvoice } = doc.data;
+  const { document: d, client, items, payments, taxInvoice, related, notes } = doc.data;
+  const isNote = d.type === 'credit_note' || d.type === 'debit_note';
+  const adjustment = Number(d.adjustmentTotal);
+  const canIssueNotes = d.type === 'invoice' && d.status !== 'draft' && d.status !== 'void';
   const heading = taxInvoice.heading.charAt(0) + taxInvoice.heading.slice(1).toLowerCase();
   const balance = balanceOf(d);
   const money = (v: string | number) => formatCurrency(v, d.currency);
@@ -148,8 +153,18 @@ export default function DocumentScreen() {
           </View>
           <T variant="heading">{client?.name ?? d.billToSnapshot?.name ?? 'No client'}</T>
           <T variant="amount">{money(d.total)}</T>
+          {isNote && related ? (
+            <View style={{ gap: Spacing.one }}>
+              <KeyValue label="For invoice" value={related.number} />
+              {d.reason ? <KeyValue label="Reason" value={d.reason} /> : null}
+              <Button label={`Open ${related.number}`} variant="ghost" onPress={() => router.push(`/documents/${related.id}`)} />
+            </View>
+          ) : null}
           {d.type === 'invoice' ? (
             <View style={{ gap: Spacing.one }}>
+              {adjustment !== 0 ? (
+                <KeyValue label="Credit/debit notes" value={`${adjustment < 0 ? '−' : '+'}${money(Math.abs(adjustment))}`} />
+              ) : null}
               <KeyValue label="Paid" value={money(d.amountPaid)} />
               <KeyValue label="Balance due" value={money(balance)} strong />
               {d.dueDate ? <KeyValue label="Due" value={formatDate(d.dueDate)} /> : null}
@@ -218,6 +233,34 @@ export default function DocumentScreen() {
           </Card>
         </Section>
 
+        {canIssueNotes ? (
+          <Section title="Credit & debit notes">
+            {notes.length > 0 ? (
+              <List>
+                {notes.map((n) => (
+                  <Row
+                    key={n.id}
+                    title={n.number}
+                    subtitle={n.reason ?? undefined}
+                    right={`${n.type === 'credit_note' ? '−' : '+'}${money(n.total)}`}
+                    onPress={() => router.push(`/documents/${n.id}`)}
+                  />
+                ))}
+              </List>
+            ) : taxInvoice.locked ? (
+              <T variant="small" muted>
+                This tax invoice is issued, so it can&apos;t be edited. Correct or cancel it with a note.
+              </T>
+            ) : null}
+            <View style={{ flexDirection: 'row', gap: Spacing.two }}>
+              {Number(d.total) + adjustment > 0 ? (
+                <Button label="Credit note" variant="secondary" style={{ flex: 1 }} onPress={() => router.push(`/documents/${id}/note?kind=credit`)} />
+              ) : null}
+              <Button label="Debit note" variant="secondary" style={{ flex: 1 }} onPress={() => router.push(`/documents/${id}/note?kind=debit`)} />
+            </View>
+          </Section>
+        ) : null}
+
         {payments.length > 0 ? (
           <Section title="Payments">
             <List>
@@ -232,9 +275,10 @@ export default function DocumentScreen() {
           </Section>
         ) : null}
 
+        {!isNote ? (
         <Section title="More">
           <View style={{ gap: Spacing.two }}>
-            {availableActions(d).map((a) => (
+            {availableActions(d, taxInvoice.locked).map((a) => (
               <Button
                 key={a.action}
                 label={a.label}
@@ -245,6 +289,7 @@ export default function DocumentScreen() {
             ))}
           </View>
         </Section>
+        ) : null}
       </Screen>
     </>
   );

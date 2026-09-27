@@ -7,10 +7,10 @@ import { documents, payments, type Document, type Payment } from "@/server/db/sc
 import type { OrgContext } from "@/server/auth/context";
 import { logActivity } from "@/server/activity";
 import { fail, invalid, ok, type ServiceResult } from "@/server/service-result";
-import { balanceDue } from "@/lib/calc";
+import { effectiveTotal } from "@invoicegen/shared/calc";
 import { round2, toMoneyString, toNumber } from "@/lib/money";
 import { paymentSchema } from "@/lib/validators";
-import { paymentProblem, statusForAmountPaid } from "@/server/payments/rules";
+import { balanceOf, paymentProblem, statusForAmountPaid } from "@/server/payments/rules";
 
 /**
  * Payment business rules, shared by the web server actions and `/api/v1`.
@@ -98,7 +98,7 @@ export async function settleBalanceInTx(
   ctx: OrgContext,
   doc: Document
 ): Promise<Document> {
-  const balance = balanceDue(doc.total, doc.amountPaid);
+  const balance = balanceOf(doc);
   if (balance > 0) {
     await tx.insert(payments).values({
       orgId: ctx.org.id,
@@ -114,7 +114,7 @@ export async function settleBalanceInTx(
   }
   const [row] = await tx
     .update(documents)
-    .set({ status: "paid", amountPaid: doc.total, paidAt: new Date(), updatedAt: new Date() })
+    .set({ status: "paid", amountPaid: toMoneyString(effectiveTotal(doc)), paidAt: new Date(), updatedAt: new Date() })
     .where(eq(documents.id, doc.id))
     .returning();
   return row;
@@ -143,7 +143,7 @@ export async function deletePaymentForOrg(
 
     if (doc) {
       const newPaid = Math.max(round2(toNumber(doc.amountPaid) - toNumber(pay.amount)), 0);
-      const remaining = balanceDue(doc.total, toMoneyString(newPaid));
+      const remaining = balanceOf({ ...doc, amountPaid: toMoneyString(newPaid) });
       await tx
         .update(documents)
         .set({

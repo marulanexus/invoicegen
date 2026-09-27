@@ -12,6 +12,7 @@ import { db } from "@/server/db";
 import { clients, documents, lineItems, type Document, type LineItem } from "@/server/db/schema";
 import type { OrgContext } from "@/server/auth/context";
 import { snapshotBillTo, snapshotFrom } from "@/server/documents/snapshots";
+import { isLockedTaxInvoice, isNote } from "@/server/documents/rules";
 import { fail, ok, type ServiceResult } from "@/server/service-result";
 import { toNumber } from "@/lib/money";
 
@@ -82,6 +83,8 @@ export interface TaxInvoiceStatus {
   heading: string;
   vatRegistered: boolean;
   problems: TaxInvoiceProblem[];
+  /** Issued tax invoice or note: no edit/reopen/void/delete (use notes). */
+  locked: boolean;
 }
 
 /** A draft as it would be issued now (current details); issued documents unchanged. */
@@ -96,6 +99,7 @@ export async function getTaxInvoiceStatus(ctx: OrgContext, doc: Document, items?
     heading: documentHeading(doc.type, input.supplier.vatRegistered),
     vatRegistered: input.supplier.vatRegistered,
     problems: taxInvoiceProblems(input),
+    locked: isNote(doc) || isLockedTaxInvoice(doc),
   };
 }
 

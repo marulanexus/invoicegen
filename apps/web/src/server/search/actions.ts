@@ -3,7 +3,7 @@
 import { and, desc, eq, ilike, or } from "drizzle-orm";
 
 import { db } from "@/server/db";
-import { clients, documents } from "@/server/db/schema";
+import { clients, documents, type Document } from "@/server/db/schema";
 import { requireOrgContext } from "@/server/auth/context";
 
 export interface SearchResults {
@@ -11,7 +11,7 @@ export interface SearchResults {
   documents: {
     id: string;
     number: string;
-    type: "invoice" | "quote" | "receipt";
+    type: Document["type"];
     status: string;
     total: string;
     currency: string;

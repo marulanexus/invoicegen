@@ -1,19 +1,23 @@
 import { eq } from "drizzle-orm";
 
-import { businessProfiles } from "@/server/db/schema";
+import { businessProfiles, type Document } from "@/server/db/schema";
 
-type DocType = "invoice" | "quote" | "receipt";
+type DocType = Document["type"];
 
 const PREFIX_FIELD = {
   invoice: "invoicePrefix",
   quote: "quotePrefix",
   receipt: "receiptPrefix",
+  credit_note: "creditNotePrefix",
+  debit_note: "debitNotePrefix",
 } as const;
 
 const COUNTER_FIELD = {
   invoice: "invoiceCounter",
   quote: "quoteCounter",
   receipt: "receiptCounter",
+  credit_note: "creditNoteCounter",
+  debit_note: "debitNoteCounter",
 } as const;
 
 /**
@@ -30,11 +34,14 @@ export async function reserveDocumentNumber(
   orgId: string,
   type: DocType
 ): Promise<string> {
+  // Lock the profile row: without it two concurrent transactions read the
+  // same counter and issue duplicate numbers (SARS needs unique serials).
   const [profile] = await tx
     .select()
     .from(businessProfiles)
     .where(eq(businessProfiles.orgId, orgId))
-    .limit(1);
+    .limit(1)
+    .for("update");
 
   if (!profile) {
     throw new Error("Business profile not found — complete onboarding first.");

@@ -97,6 +97,12 @@ export function DocumentPreview({
                   <span className="text-slate-400">PO:</span> {view.poNumber}
                 </p>
               )}
+              {view.related && (
+                <p>
+                  <span className="text-slate-400">For invoice:</span> {view.related.number}
+                  {view.related.issueDate ? ` (${formatDate(view.related.issueDate)})` : ""}
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -119,6 +125,13 @@ export function DocumentPreview({
                 </p>
               )}
             </div>
+          </div>
+        )}
+
+        {view.reason && (
+          <div className="mt-6 rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-600">
+            <span className="font-semibold text-slate-700">Reason: </span>
+            {view.reason}
           </div>
         )}
 
@@ -199,6 +212,15 @@ export function DocumentPreview({
                 <p className="text-right text-[11px] text-slate-500">
                   Amounts include {view.taxLabel} at {taxRates.join("%, ")}%.
                 </p>
+              )}
+              {view.adjustmentTotal !== 0 && (
+                <Row
+                  label="Credit/debit notes"
+                  value={`${view.adjustmentTotal < 0 ? "−" : "+"}${formatCurrency(Math.abs(view.adjustmentTotal), cur)}`}
+                />
+              )}
+              {view.adjustmentTotal !== 0 && view.amountPaid === 0 && (
+                <Row label="Balance due" value={formatCurrency(view.balanceDue, cur)} strong />
               )}
               {view.amountPaid > 0 && (
                 <>

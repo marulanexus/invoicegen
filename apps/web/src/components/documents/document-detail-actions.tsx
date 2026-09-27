@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Send } from "lucide-react";
 import { toast } from "sonner";
+import type { Document } from "@/server/db/schema";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -24,12 +25,14 @@ export function DocumentDetailActions({
   status,
   number,
   defaultEmail,
+  locked = false,
 }: {
   id: string;
-  type: "invoice" | "quote" | "receipt";
+  type: Document["type"];
   status: string;
   number: string;
   defaultEmail?: string | null;
+  locked?: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -57,6 +60,7 @@ export function DocumentDetailActions({
         id={id}
         type={type}
         status={status}
+        locked={locked}
         onSend={() => setOpen(true)}
       />
 

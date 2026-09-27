@@ -161,6 +161,12 @@ export function DocumentPdf({ view }: { view: DocumentView }) {
               {view.poNumber ? (
                 <Text style={styles.muted}>PO: {view.poNumber}</Text>
               ) : null}
+              {view.related ? (
+                <Text style={styles.muted}>
+                  For invoice: {view.related.number}
+                  {view.related.issueDate ? ` (${formatDate(view.related.issueDate)})` : ""}
+                </Text>
+              ) : null}
             </View>
           </View>
         </View>
@@ -183,6 +189,15 @@ export function DocumentPdf({ view }: { view: DocumentView }) {
                 {taxIdLabel}: {view.billTo.taxId}
               </Text>
             ) : null}
+          </View>
+        ) : null}
+
+        {view.reason ? (
+          <View style={{ marginTop: 14, padding: 6, backgroundColor: "#f8fafc" }}>
+            <Text style={styles.muted}>
+              <Text style={{ fontFamily: "Helvetica-Bold" }}>Reason: </Text>
+              {view.reason}
+            </Text>
           </View>
         ) : null}
 
@@ -247,12 +262,23 @@ export function DocumentPdf({ view }: { view: DocumentView }) {
                 Amounts include {view.taxLabel} at {taxRates.join("%, ")}%.
               </Text>
             ) : null}
-            {view.amountPaid > 0 ? (
+            {view.adjustmentTotal !== 0 ? (
+              <View style={styles.totalRow}>
+                <Text style={styles.muted}>Credit/debit notes</Text>
+                <Text>
+                  {view.adjustmentTotal < 0 ? "-" : "+"}
+                  {formatCurrency(Math.abs(view.adjustmentTotal), cur)}
+                </Text>
+              </View>
+            ) : null}
+            {view.amountPaid > 0 || view.adjustmentTotal !== 0 ? (
               <>
+                {view.amountPaid > 0 ? (
                 <View style={styles.totalRow}>
                   <Text style={styles.muted}>Paid</Text>
                   <Text>-{formatCurrency(view.amountPaid, cur)}</Text>
                 </View>
+                ) : null}
                 <View style={styles.totalRow}>
                   <Text style={{ fontFamily: "Helvetica-Bold" }}>Balance due</Text>
                   <Text style={{ fontFamily: "Helvetica-Bold" }}>

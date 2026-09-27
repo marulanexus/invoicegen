@@ -9,13 +9,16 @@ import { Spacing } from '@/constants/theme';
 import { formatCurrency, formatDate, STATUS } from '@/lib/format';
 import { useDocuments } from '@/lib/queries';
 
-const TYPES: { value: DocumentType; label: string }[] = [
+/** Types with their own list; credit/debit notes show on their invoice. */
+type ListType = Extract<DocumentType, 'invoice' | 'quote' | 'receipt'>;
+
+const TYPES: { value: ListType; label: string }[] = [
   { value: 'invoice', label: 'Invoices' },
   { value: 'quote', label: 'Quotes' },
   { value: 'receipt', label: 'Receipts' },
 ];
 
-const FILTERS: Record<DocumentType, { value: DocumentStatus | 'all'; label: string }[]> = {
+const FILTERS: Record<ListType, { value: DocumentStatus | 'all'; label: string }[]> = {
   invoice: [
     { value: 'all', label: 'All' },
     { value: 'draft', label: 'Draft' },
@@ -35,7 +38,7 @@ const FILTERS: Record<DocumentType, { value: DocumentStatus | 'all'; label: stri
 };
 
 export default function DocumentsScreen() {
-  const [type, setType] = useState<DocumentType>('invoice');
+  const [type, setType] = useState<ListType>('invoice');
   const [status, setStatus] = useState<DocumentStatus | 'all'>('all');
   const [search, setSearch] = useState('');
   const deferredSearch = useDeferredValue(search.trim());

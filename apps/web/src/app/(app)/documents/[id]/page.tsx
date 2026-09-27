@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { amountOwed, effectiveTotal } from "@invoicegen/shared/calc";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 
@@ -15,6 +16,8 @@ import { requireOrgContext } from "@/server/auth/context";
 import { getDocument } from "@/server/documents/queries";
 import { asIssued, getTaxInvoiceStatus } from "@/server/documents/tax-invoice";
 import { TaxInvoiceChecklist } from "@/components/documents/tax-invoice-checklist";
+import { NoteDialog } from "@/components/documents/note-dialog";
+import { isLockedTaxInvoice, isNote } from "@/server/documents/rules";
 import { viewFromStored } from "@/lib/document-view";
 import { formatCurrency } from "@/lib/money";
 import { formatDate, statusMeta } from "@/lib/format";
@@ -34,17 +37,27 @@ export default async function DocumentDetailPage({
   const doc = await asIssued(ctx, full.document);
   const taxStatus = doc.status === "draft" ? await getTaxInvoiceStatus(ctx, doc, items) : null;
   const view = viewFromStored(doc, items, {
+    related: full.related,
     showPoweredBy: !ctx.plan.features.customBranding,
   });
   const meta = statusMeta(doc.status);
-  const balance = Number(doc.total) - Number(doc.amountPaid);
+  const balance = amountOwed(doc);
+  const note = isNote(doc);
+  // Issued tax invoices and notes are final: corrections go through notes.
+  const locked = note || isLockedTaxInvoice(doc);
+  const adjusted = Number(doc.adjustmentTotal) !== 0;
+  const canIssueNotes = doc.type === "invoice" && doc.status !== "draft" && doc.status !== "void";
+  // Paid more than the invoice is now worth (e.g. credited after payment).
+  const refundDue = !note ? Math.round((Number(doc.amountPaid) - effectiveTotal(doc)) * 100) / 100 : 0;
+  const backHref = note && full.related ? `/documents/${full.related.id}` : note ? "/invoices" : `/${doc.type}s`;
+  const backLabel = note && full.related ? `Back to ${full.related.number}` : note ? "Back to invoices" : `Back to ${doc.type}s`;
 
   return (
     <div>
       <div className="mb-4">
         <Button variant="ghost" size="sm" asChild className="-ml-2 text-muted-foreground">
-          <Link href={`/${doc.type}s`}>
-            <ArrowLeft className="h-4 w-4" /> Back to {doc.type}s
+          <Link href={backHref}>
+            <ArrowLeft className="h-4 w-4" /> {backLabel}
           </Link>
         </Button>
       </div>
@@ -55,6 +68,7 @@ export default async function DocumentDetailPage({
           <Badge variant={meta.variant}>{meta.label}</Badge>
         </div>
         <DocumentDetailActions
+          locked={locked}
           id={doc.id}
           type={doc.type}
           status={doc.status}
@@ -101,22 +115,98 @@ export default async function DocumentDetailPage({
               {doc.type === "quote" && (
                 <Meta label="Valid until">{formatDate(doc.validUntil)}</Meta>
               )}
+              {note && full.related && (
+                <Meta label="For invoice">
+                  <Link href={`/documents/${full.related.id}`} className="text-primary hover:underline">
+                    {full.related.number}
+                  </Link>
+                </Meta>
+              )}
+              {note && doc.reason && <Meta label="Reason">{doc.reason}</Meta>}
               <Separator />
-              <Meta label="Total">
+              <Meta label={note ? "Amount" : "Total"}>
                 <span className="font-semibold">
                   {formatCurrency(doc.total, doc.currency)}
                 </span>
               </Meta>
-              <Meta label="Paid">{formatCurrency(doc.amountPaid, doc.currency)}</Meta>
-              <Meta label="Balance">
-                <span className="font-semibold">
-                  {formatCurrency(balance, doc.currency)}
-                </span>
-              </Meta>
+              {adjusted && (
+                <Meta label="Credit/debit notes">
+                  {Number(doc.adjustmentTotal) < 0 ? "−" : "+"}
+                  {formatCurrency(Math.abs(Number(doc.adjustmentTotal)), doc.currency)}
+                </Meta>
+              )}
+              {!note && (
+                <>
+                  <Meta label="Paid">{formatCurrency(doc.amountPaid, doc.currency)}</Meta>
+                  <Meta label="Balance">
+                    <span className="font-semibold">
+                      {formatCurrency(balance, doc.currency)}
+                    </span>
+                  </Meta>
+                  {refundDue > 0.005 && (
+                    <Meta label="Refund due to client">
+                      <span className="font-semibold text-warning-foreground">
+                        {formatCurrency(refundDue, doc.currency)}
+                      </span>
+                    </Meta>
+                  )}
+                </>
+              )}
             </CardContent>
           </Card>
 
           {doc.status !== "void" && <CopyLink id={doc.id} isDraft={doc.status === "draft"} />}
+
+          {(canIssueNotes || full.notes.length > 0) && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Credit &amp; debit notes</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                {full.notes.length === 0 ? (
+                  <p className="text-muted-foreground">
+                    {locked
+                      ? "This tax invoice is issued, so it can't be edited. Correct or cancel it with a note."
+                      : "Correct or cancel this invoice with a note."}
+                  </p>
+                ) : (
+                  <ul className="space-y-2">
+                    {full.notes.map((n) => (
+                      <li key={n.id} className="flex items-center justify-between gap-2">
+                        <Link href={`/documents/${n.id}`} className="text-primary hover:underline">
+                          {n.number}
+                        </Link>
+                        <span className="font-medium tabular-nums">
+                          {n.type === "credit_note" ? "−" : "+"}
+                          {formatCurrency(n.total, n.currency)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {canIssueNotes && effectiveTotal(doc) > 0.005 && (
+                  <NoteDialog
+                    kind="credit"
+                    invoiceId={doc.id}
+                    invoiceNumber={doc.number}
+                    remaining={effectiveTotal(doc)}
+                    currency={doc.currency}
+                    taxLabel={doc.taxLabel ?? "VAT"}
+                  />
+                )}
+                {canIssueNotes && (
+                  <NoteDialog
+                    kind="debit"
+                    invoiceId={doc.id}
+                    invoiceNumber={doc.number}
+                    remaining={effectiveTotal(doc)}
+                    currency={doc.currency}
+                    taxLabel={doc.taxLabel ?? "VAT"}
+                  />
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           {doc.type === "invoice" && ctx.plan.features.recurringInvoices && (
             <RecurringDialog invoiceId={doc.id} />
@@ -137,6 +227,7 @@ export default async function DocumentDetailPage({
             />
           )}
 
+          {!note && (
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Payments</CardTitle>
@@ -160,6 +251,7 @@ export default async function DocumentDetailPage({
               )}
             </CardContent>
           </Card>
+          )}
         </div>
       </div>
     </div>

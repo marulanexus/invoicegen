@@ -56,3 +56,12 @@ describe("statusForAmountPaid", () => {
     expect(statusForAmountPaid(invoice({ status: "overdue" }), 0).status).toBe("overdue");
   });
 });
+
+describe("with credit and debit notes", () => {
+  it("owes total + adjustments − paid", () => {
+    expect(balanceOf(invoice({ adjustmentTotal: "-150.00" }))).toBe(1000);
+    expect(paymentProblem(invoice({ adjustmentTotal: "-150.00" }), 1000.01)?.code).toBe("validation");
+    expect(statusForAmountPaid(invoice({ adjustmentTotal: "-150.00" }), 1000)).toEqual({ status: "paid", fullyPaid: true });
+    expect(balanceOf(invoice({ adjustmentTotal: "115.00" }))).toBe(1265);
+  });
+});

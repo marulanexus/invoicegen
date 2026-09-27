@@ -1,15 +1,17 @@
 import type { Document } from "@/server/db/schema";
-import { formatCurrency, round2, toNumber } from "@/lib/money";
+import { amountOwed, effectiveTotal } from "@invoicegen/shared/calc";
+import { formatCurrency } from "@/lib/money";
 
 /**
  * Pure payment rules (no DB), used by ./service.ts and unit-tested directly.
  */
 
-type PayableDoc = Pick<Document, "type" | "status" | "total" | "amountPaid" | "currency">;
+type PayableDoc = Pick<Document, "type" | "status" | "total" | "amountPaid" | "currency"> &
+  Partial<Pick<Document, "adjustmentTotal">>;
 
-/** What's still owed on a document, never below zero. */
-export function balanceOf(doc: Pick<Document, "total" | "amountPaid">): number {
-  return Math.max(round2(toNumber(doc.total) - toNumber(doc.amountPaid)), 0);
+/** What's still owed: total + credit/debit note adjustments − paid, never below zero. */
+export function balanceOf(doc: Pick<Document, "total" | "amountPaid"> & Partial<Pick<Document, "adjustmentTotal">>): number {
+  return amountOwed(doc);
 }
 
 export type PaymentProblem =
@@ -40,10 +42,10 @@ export function paymentProblem(doc: PayableDoc, amount: number): PaymentProblem 
 
 /** Document status once `newAmountPaid` has been received in total. */
 export function statusForAmountPaid(
-  doc: Pick<Document, "total" | "status">,
+  doc: Pick<Document, "total" | "status"> & Partial<Pick<Document, "adjustmentTotal">>,
   newAmountPaid: number
 ): { status: Document["status"]; fullyPaid: boolean } {
-  const fullyPaid = newAmountPaid >= toNumber(doc.total) - 0.005;
+  const fullyPaid = newAmountPaid >= effectiveTotal(doc) - 0.005;
   if (fullyPaid) return { status: "paid", fullyPaid };
   if (newAmountPaid > 0) return { status: "partial", fullyPaid };
   return { status: doc.status, fullyPaid };

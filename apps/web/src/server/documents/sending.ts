@@ -14,6 +14,7 @@ import {
   buildDocumentEmail,
   defaultSubject,
   interpolate,
+  NOTE_EMAIL_TEMPLATES,
   templateVars,
 } from "@/server/email/templates";
 import { getEmailTemplate } from "@/server/email/template-store";
@@ -69,12 +70,17 @@ export async function sendDocumentForOrg(
 
   const view = viewFromStored(full.document, full.items, {
     showPoweredBy: !ctx.plan.features.customBranding,
+    related: full.related,
   });
   const businessName = ctx.profile?.displayName ?? ctx.org.name;
 
   // Resolve the org's (possibly customized) template for this document type and
   // interpolate variables. A user-supplied subject/message overrides it.
-  const template = await getEmailTemplate(ctx.org.id, full.document.type);
+  const docType = full.document.type;
+  const template =
+    docType === "credit_note" || docType === "debit_note"
+      ? NOTE_EMAIL_TEMPLATES[docType]
+      : await getEmailTemplate(ctx.org.id, docType);
   const vars = templateVars(view, businessName, full.client?.name);
   const subject =
     input.subject?.trim() ||

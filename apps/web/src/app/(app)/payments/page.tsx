@@ -1,4 +1,5 @@
 import { CreditCard } from "lucide-react";
+import { amountOwed } from "@invoicegen/shared/calc";
 
 import { PageHeader } from "@/components/app/page-header";
 import { EmptyState } from "@/components/app/empty-state";
@@ -37,7 +38,7 @@ export default async function PaymentsPage() {
     .map((d) => ({
       id: d.id,
       number: d.number,
-      balance: Number(d.total) - Number(d.amountPaid),
+      balance: amountOwed(d),
       currency: d.currency,
     }))
     .filter((d) => d.balance > 0.001);

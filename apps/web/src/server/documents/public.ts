@@ -14,7 +14,7 @@ import { viewFromStored, type DocumentView } from "@/lib/document-view";
 export interface PublicDocument {
   view: DocumentView;
   number: string;
-  type: "invoice" | "quote" | "receipt";
+  type: Document["type"];
   /** Online payment options, when this invoice can be paid now. */
   payment: { providers: Provider[]; balance: number; currency: string } | null;
 }
@@ -28,6 +28,17 @@ async function paymentOptions(doc: Document): Promise<PublicDocument["payment"]>
     (p) => p !== "payfast" || balance >= PAYFAST_MIN_AMOUNT
   );
   return providers.length ? { providers, balance, currency: doc.currency } : null;
+}
+
+/** For a credit/debit note: the invoice it adjusts (same organisation only). */
+async function relatedSummary(doc: Document) {
+  if (!doc.relatedDocumentId) return null;
+  const [rel] = await db
+    .select({ number: documents.number, issueDate: documents.issueDate })
+    .from(documents)
+    .where(and(eq(documents.id, doc.relatedDocumentId), eq(documents.orgId, doc.orgId)))
+    .limit(1);
+  return rel ?? null;
 }
 
 /** Look up a document by its public share token (no auth / org scope). */
@@ -70,7 +81,7 @@ export async function getPublicDocument(
 
   const showPoweredBy = !getPlan(org?.plan).features.customBranding;
   return {
-    view: viewFromStored(doc, items, { showPoweredBy }),
+    view: viewFromStored(doc, items, { showPoweredBy, related: await relatedSummary(doc) }),
     number: doc.number,
     type: doc.type,
     payment: await paymentOptions(doc),

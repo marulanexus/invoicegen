@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, or, sql } from "drizzle-orm";
 
 import { db } from "@/server/db";
 import {
@@ -14,6 +14,7 @@ import {
   type Payment,
 } from "@/server/db/schema";
 
+/** Types that have their own list screen (notes are listed on their invoice). */
 export type DocumentType = "invoice" | "quote" | "receipt";
 
 export type DocumentListItem = Document & {
@@ -57,11 +58,22 @@ export async function listDocuments(
   return rows.map((r) => ({ ...r.doc, clientName: r.clientName }));
 }
 
+export interface RelatedDocument {
+  id: string;
+  number: string;
+  type: Document["type"];
+  issueDate: string | null;
+}
+
 export interface FullDocument {
   document: Document;
   client: Client | null;
   items: LineItem[];
   payments: Payment[];
+  /** Credit/debit notes: the invoice they adjust. */
+  related: RelatedDocument | null;
+  /** Invoices: credit/debit notes issued against it, oldest first. */
+  notes: Document[];
 }
 
 export async function getDocument(
@@ -75,7 +87,7 @@ export async function getDocument(
     .limit(1);
   if (!doc) return null;
 
-  const [client, items, pays] = await Promise.all([
+  const [client, items, pays, related, notes] = await Promise.all([
     doc.clientId
       ? db
           .select()
@@ -93,6 +105,20 @@ export async function getDocument(
       .from(payments)
       .where(eq(payments.documentId, id))
       .orderBy(desc(payments.paidAt)),
+    doc.relatedDocumentId
+      ? db
+          .select({ id: documents.id, number: documents.number, type: documents.type, issueDate: documents.issueDate })
+          .from(documents)
+          .where(and(eq(documents.id, doc.relatedDocumentId), eq(documents.orgId, orgId)))
+          .limit(1)
+      : Promise.resolve([]),
+    doc.type === "invoice"
+      ? db
+          .select()
+          .from(documents)
+          .where(and(eq(documents.relatedDocumentId, id), eq(documents.orgId, orgId)))
+          .orderBy(asc(documents.createdAt))
+      : Promise.resolve([]),
   ]);
 
   return {
@@ -100,6 +126,8 @@ export async function getDocument(
     client: client[0] ?? null,
     items,
     payments: pays,
+    related: related[0] ?? null,
+    notes,
   };
 }
 

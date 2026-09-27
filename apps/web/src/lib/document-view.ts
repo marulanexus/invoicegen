@@ -6,8 +6,10 @@
 
 import { documentHeading } from "@invoicegen/shared/tax-invoice";
 
+import { amountOwed } from "@invoicegen/shared/calc";
+
 import { calcDocumentTotals, calcLine } from "./calc";
-import { round2, toNumber } from "./money";
+import { toNumber } from "./money";
 import type { Document, LineItem } from "@/server/db/schema";
 
 export interface PartyView {
@@ -30,7 +32,7 @@ export interface LineView {
 }
 
 export interface DocumentView {
-  type: "invoice" | "quote" | "receipt";
+  type: Document["type"];
   /** "TAX INVOICE" for VAT vendors' invoices, else "INVOICE"/"QUOTE"/"RECEIPT". */
   heading: string;
   number: string;
@@ -49,7 +51,12 @@ export interface DocumentView {
   taxTotal: number;
   total: number;
   amountPaid: number;
+  /** Invoices: debit notes minus credit notes issued against it. */
+  adjustmentTotal: number;
   balanceDue: number;
+  /** Credit/debit notes: the invoice adjusted and why (VAT Act s21(3)). */
+  related?: { number: string; issueDate: string | null } | null;
+  reason?: string | null;
   taxLabel: string;
   taxInclusive: boolean;
   notes?: string | null;
@@ -113,7 +120,7 @@ function partyFromSnapshot(
 export function viewFromStored(
   doc: Document,
   items: LineItem[],
-  opts: { showPoweredBy: boolean }
+  opts: { showPoweredBy: boolean; related?: { number: string; issueDate: string | null } | null }
 ): DocumentView {
   const from =
     partyFromSnapshot(doc.fromSnapshot) ?? { name: "Your business", lines: [] };
@@ -150,7 +157,10 @@ export function viewFromStored(
     taxTotal: toNumber(doc.taxTotal),
     total,
     amountPaid,
-    balanceDue: round2(total - amountPaid),
+    adjustmentTotal: toNumber(doc.adjustmentTotal),
+    balanceDue: amountOwed(doc),
+    related: opts.related ?? null,
+    reason: doc.reason,
     taxLabel: doc.taxLabel ?? "Tax",
     taxInclusive: doc.taxInclusive,
     notes: doc.notes,
