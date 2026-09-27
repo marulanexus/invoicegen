@@ -12,6 +12,7 @@ import {
 import { getPlan } from "@/lib/plans";
 import { env } from "@/lib/env";
 import { notifyOverdue } from "@/server/notifications/events";
+import { expireLapsedSubscriptions } from "@/server/billing/payfast";
 
 export const runtime = "nodejs";
 
@@ -20,6 +21,7 @@ export const runtime = "nodejs";
  *   1. Flags open invoices past their due date as `overdue`.
  *   2. Sends reminder emails per each org's configured offset schedule,
  *      de-duplicated via `reminder_log`.
+ *   3. Moves orgs whose rand (PayFast) subscription stopped paying to Free.
  *
  * Protect with the CRON_SECRET bearer token.
  */
@@ -44,6 +46,7 @@ export async function GET(req: Request) {
   // 0. Generate due recurring invoices.
   const { runDueRecurring } = await import("@/server/documents/recurring-queries");
   const recurringCreated = await runDueRecurring();
+  const subscriptionsExpired = await expireLapsedSubscriptions();
 
   // 1. Mark overdue.
   const overdue = await db
@@ -183,6 +186,7 @@ export async function GET(req: Request) {
   return NextResponse.json({
     ok: true,
     recurringCreated,
+    subscriptionsExpired,
     markedOverdue: overdue.length,
     remindersSent,
     ranAt: new Date().toISOString(),

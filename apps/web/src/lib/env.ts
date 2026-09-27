@@ -35,6 +35,16 @@ export const env = {
   STRIPE_PRICE_GROWTH: get("STRIPE_PRICE_GROWTH"),
   STRIPE_PRICE_BUSINESS: get("STRIPE_PRICE_BUSINESS"),
 
+  // InvoiceGen's own subscriptions in rand: Marula Nexus's PayFast merchant
+  // account (not a customer's). Subscriptions need the passphrase.
+  PAYFAST_BILLING_MERCHANT_ID: get("PAYFAST_BILLING_MERCHANT_ID"),
+  PAYFAST_BILLING_MERCHANT_KEY: get("PAYFAST_BILLING_MERCHANT_KEY"),
+  PAYFAST_BILLING_PASSPHRASE: get("PAYFAST_BILLING_PASSPHRASE"),
+  /** "live" to charge real cards; anything else uses the PayFast sandbox. */
+  PAYFAST_BILLING_MODE: get("PAYFAST_BILLING_MODE") === "live" ? ("live" as const) : ("test" as const),
+  /** Set once Marula Nexus is VAT-registered: prices then include 15% VAT. */
+  BILLING_VAT_NUMBER: get("BILLING_VAT_NUMBER"),
+
   // Email (Resend platform default)
   RESEND_API_KEY: get("RESEND_API_KEY"),
   EMAIL_FROM: get("EMAIL_FROM") ?? "InvoiceGen <invoices@example.com>",
@@ -65,6 +75,9 @@ export const isClerkConfigured = Boolean(
   env.CLERK_PUBLISHABLE_KEY && env.CLERK_SECRET_KEY
 );
 export const isStripeConfigured = Boolean(env.STRIPE_SECRET_KEY);
+export const isPayfastBillingConfigured = Boolean(
+  env.PAYFAST_BILLING_MERCHANT_ID && env.PAYFAST_BILLING_MERCHANT_KEY && env.PAYFAST_BILLING_PASSPHRASE
+);
 export const isResendConfigured = Boolean(env.RESEND_API_KEY);
 export const isGoogleConfigured = Boolean(
   env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET

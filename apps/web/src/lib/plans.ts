@@ -1,6 +1,7 @@
 /**
  * Pricing tiers and the feature/limit matrix used for enforcement.
- * Mirror these `priceId`s with the Stripe Price IDs in your env.
+ * Rand prices are charged through PayFast recurring billing; the USD
+ * `priceMonthly` mirrors the Stripe Price IDs in your env (global, later).
  */
 
 export type PlanId = "free" | "growth" | "business";
@@ -21,10 +22,15 @@ export interface PlanLimits {
   maxSeats: number;
 }
 
+export type BillingInterval = "monthly" | "yearly";
+
 export interface Plan {
   id: PlanId;
   name: string;
   tagline: string;
+  /** Rand, VAT-inclusive once Marula Nexus is VAT-registered. Yearly = 10 months (2 free). */
+  zar: Record<BillingInterval, number>;
+  /** USD (Stripe). */
   priceMonthly: number;
   priceEnvKey?: "STRIPE_PRICE_GROWTH" | "STRIPE_PRICE_BUSINESS";
   limits: PlanLimits;
@@ -37,6 +43,7 @@ export const PLANS: Record<PlanId, Plan> = {
     id: "free",
     name: "Free Starter",
     tagline: "Everything you need to send your first invoices.",
+    zar: { monthly: 0, yearly: 0 },
     priceMonthly: 0,
     limits: { maxClients: 3, maxDocumentsPerMonth: 5, maxSeats: 1 },
     features: {
@@ -58,6 +65,7 @@ export const PLANS: Record<PlanId, Plan> = {
     id: "growth",
     name: "Growth Pro",
     tagline: "Automate the busywork as you scale.",
+    zar: { monthly: 149, yearly: 1490 },
     priceMonthly: 18,
     priceEnvKey: "STRIPE_PRICE_GROWTH",
     limits: { maxClients: -1, maxDocumentsPerMonth: -1, maxSeats: 1 },
@@ -80,6 +88,7 @@ export const PLANS: Record<PlanId, Plan> = {
     id: "business",
     name: "Business Plus",
     tagline: "For teams that bill together.",
+    zar: { monthly: 299, yearly: 2990 },
     priceMonthly: 32,
     priceEnvKey: "STRIPE_PRICE_BUSINESS",
     limits: { maxClients: -1, maxDocumentsPerMonth: -1, maxSeats: 10 },
@@ -109,4 +118,10 @@ export function getPlan(id: PlanId | string | null | undefined): Plan {
 
 export function isUnlimited(limit: number): boolean {
   return limit === -1;
+}
+
+/** Paid plans only: what a PayFast subscription for `plan` charges each cycle. */
+export function zarPrice(plan: PlanId, interval: BillingInterval): number | null {
+  if (plan === "free") return null;
+  return PLANS[plan].zar[interval];
 }

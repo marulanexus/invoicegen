@@ -1,13 +1,15 @@
 "use server";
 
 import { eq } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
 
 import { db } from "@/server/db";
 import { subscriptions } from "@/server/db/schema";
 import { requireOrgContext } from "@/server/auth/context";
 import { getStripe, priceIdForPlan } from "@/server/billing/stripe";
 import { env } from "@/lib/env";
-import type { PlanId } from "@/lib/plans";
+import type { BillingInterval, PlanId } from "@/lib/plans";
+import { cancelOrgSubscription, startPayfastSubscription } from "@/server/billing/payfast";
 
 export interface BillingResult {
   ok: boolean;
@@ -92,4 +94,32 @@ export async function openBillingPortal(): Promise<BillingResult> {
     return_url: `${env.APP_URL}/settings/billing`,
   });
   return { ok: true, url: session.url };
+}
+
+/* ───────────────────── Rand subscriptions (PayFast) ───────────────────── */
+
+export type PayfastStartResult =
+  | { ok: true; action: string; fields: [string, string][] }
+  | { ok: false; error: string };
+
+/** Only the owner or an admin may change what the business pays. */
+function canManageBilling(role: string): boolean {
+  return role === "owner" || role === "admin";
+}
+
+/** The signed form the browser posts to PayFast to set up the subscription. */
+export async function startPayfastCheckout(plan: PlanId, interval: BillingInterval): Promise<PayfastStartResult> {
+  const ctx = await requireOrgContext();
+  if (!canManageBilling(ctx.member.role)) return { ok: false, error: "Only the owner or an admin can change the plan." };
+  const res = await startPayfastSubscription(ctx, plan, interval);
+  return res.ok ? { ok: true, ...res.data } : { ok: false, error: res.error };
+}
+
+export async function cancelSubscription(): Promise<BillingResult> {
+  const ctx = await requireOrgContext();
+  if (!canManageBilling(ctx.member.role)) return { ok: false, error: "Only the owner or an admin can cancel the plan." };
+  const res = await cancelOrgSubscription(ctx);
+  if (!res.ok) return { ok: false, error: res.error };
+  revalidatePath("/settings/billing");
+  return { ok: true };
 }

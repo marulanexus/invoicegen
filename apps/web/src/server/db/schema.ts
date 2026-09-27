@@ -84,6 +84,10 @@ export const checkoutStatusEnum = pgEnum("checkout_status", [
   "failed",
 ]);
 
+export const billingProviderEnum = pgEnum("billing_provider", ["stripe", "payfast"]);
+
+export const billingIntervalEnum = pgEnum("billing_interval", ["monthly", "yearly"]);
+
 export const subscriptionStatusEnum = pgEnum("subscription_status", [
   "active",
   "trialing",
@@ -387,6 +391,33 @@ export const payments = pgTable("payments", {
 
 /* ──────────────────────── Subscriptions & usage ──────────────────────── */
 
+/**
+ * Each charge for an org's InvoiceGen subscription (PayFast recurring billing).
+ * Kept as billing history and, once VAT-registered, the basis of tax invoices.
+ */
+export const billingPayments = pgTable("billing_payments", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  orgId: uuid("org_id")
+    .notNull()
+    .references(() => organizations.id, { onDelete: "cascade" }),
+  provider: billingProviderEnum("provider").notNull(),
+  /** PayFast pf_payment_id: one row per charge, so repeated ITNs are ignored. */
+  providerPaymentId: text("provider_payment_id").notNull().unique(),
+  plan: planEnum("plan").notNull(),
+  billingInterval: billingIntervalEnum("billing_interval").notNull(),
+  amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
+  currency: text("currency").notNull().default("ZAR"),
+  /** VAT included in `amount`; 0 while not VAT-registered. */
+  vatAmount: numeric("vat_amount", { precision: 14, scale: 2 }).notNull().default("0"),
+  /** Our VAT number when charged, if registered. */
+  vatNumber: text("vat_number"),
+  periodEnd: timestamp("period_end", { withTimezone: true }).notNull(),
+  paidAt: timestamp("paid_at", { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
 export const subscriptions = pgTable("subscriptions", {
   id: uuid("id").primaryKey().defaultRandom(),
   orgId: uuid("org_id")
@@ -396,6 +427,11 @@ export const subscriptions = pgTable("subscriptions", {
   stripeCustomerId: text("stripe_customer_id"),
   stripeSubscriptionId: text("stripe_subscription_id"),
   stripePriceId: text("stripe_price_id"),
+  /** Who charges this subscription; null while on the free plan. */
+  provider: billingProviderEnum("provider"),
+  billingInterval: billingIntervalEnum("billing_interval"),
+  /** PayFast recurring billing token (for cancelling). */
+  payfastToken: text("payfast_token"),
   plan: planEnum("plan").notNull().default("free"),
   status: subscriptionStatusEnum("status").notNull().default("active"),
   seats: integer("seats").notNull().default(1),
@@ -774,3 +810,4 @@ export type PaymentGateway = typeof paymentGateways.$inferSelect;
 export type PaymentCheckout = typeof paymentCheckouts.$inferSelect;
 export type PushDevice = typeof pushDevices.$inferSelect;
 export type PaymentProof = typeof paymentProofs.$inferSelect;
+export type BillingPayment = typeof billingPayments.$inferSelect;

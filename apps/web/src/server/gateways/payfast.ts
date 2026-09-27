@@ -67,13 +67,24 @@ export function buildPayfastForm(req: PayfastPaymentRequest): {
     ["item_name", req.itemName.slice(0, 100)],
     ["item_description", (req.itemDescription ?? "").slice(0, 255)],
   ];
-  // Post exactly what was signed: trimmed, blanks left out.
+  return signedPayfastForm(req.mode, fields, req.passphrase);
+}
+
+/**
+ * The form to post to PayFast: `fields` in PayFast's documented order, blanks
+ * left out, values trimmed (exactly what was signed), then the signature.
+ */
+export function signedPayfastForm(
+  mode: PayfastMode,
+  fields: [string, string][],
+  passphrase?: string | null
+): { action: string; fields: [string, string][] } {
   const nonEmpty = fields
     .map(([k, v]) => [k, v.trim()] as [string, string])
     .filter(([, v]) => v !== "");
   return {
-    action: `https://${payfastHost(req.mode)}/eng/process`,
-    fields: [...nonEmpty, ["signature", payfastSignature(nonEmpty, req.passphrase)]],
+    action: `https://${payfastHost(mode)}/eng/process`,
+    fields: [...nonEmpty, ["signature", payfastSignature(nonEmpty, passphrase)]],
   };
 }
 
@@ -183,4 +194,45 @@ export async function confirmWithPayfast(fields: [string, string][], mode: Payfa
     signal: AbortSignal.timeout(10_000),
   });
   return (await res.text()).trim() === "VALID";
+}
+
+/* ───────────────────────── Subscriptions API ───────────────────────── */
+
+/**
+ * API signature: every header/body variable plus the passphrase, sorted
+ * alphabetically (unlike the form signature), urlencoded, MD5 in lower case.
+ * The sandbox's `testing` query flag is left out.
+ */
+export function payfastApiSignature(vars: Record<string, string>, passphrase: string): string {
+  const all: Record<string, string> = { ...vars, passphrase: passphrase.trim() };
+  const base = Object.keys(all)
+    .sort()
+    .filter((k) => all[k] !== "")
+    .map((k) => `${k}=${phpUrlEncode(all[k])}`)
+    .join("&");
+  return crypto.createHash("md5").update(base).digest("hex");
+}
+
+/** ISO-8601 in South African time, as the API expects (e.g. 2026-09-27T12:00:01+02:00). */
+export function payfastTimestamp(now = new Date()): string {
+  const sast = new Date(now.getTime() + 2 * 60 * 60_000);
+  return `${sast.toISOString().slice(0, 19)}+02:00`;
+}
+
+/** Stop a recurring subscription (PUT /subscriptions/:token/cancel). True when PayFast accepted it. */
+export async function cancelPayfastSubscription(opts: {
+  token: string;
+  merchantId: string;
+  passphrase: string;
+  mode: PayfastMode;
+}): Promise<boolean> {
+  const headers = { "merchant-id": opts.merchantId, version: "v1", timestamp: payfastTimestamp() };
+  const url = `https://api.payfast.co.za/subscriptions/${encodeURIComponent(opts.token)}/cancel${opts.mode === "test" ? "?testing=true" : ""}`;
+  const res = await fetch(url, {
+    method: "PUT",
+    headers: { ...headers, signature: payfastApiSignature(headers, opts.passphrase) },
+    signal: AbortSignal.timeout(10_000),
+  });
+  const json = (await res.json().catch(() => null)) as { data?: { response?: unknown } } | null;
+  return res.ok && json?.data?.response !== false;
 }

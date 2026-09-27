@@ -58,6 +58,11 @@ session token; it never connects to the database directly.
 Node-only or browser-only APIs. It ships TypeScript source (no build step);
 Next compiles it via `transpilePackages`, Metro compiles it for mobile.
 
+## Test accounts
+
+Online payments, InvoiceGen's own subscriptions and push notifications need
+accounts of your own and a public HTTPS URL. See [docs/test-accounts.md](docs/test-accounts.md).
+
 ## Deployment
 
 - **Web (Vercel):** set the project's *Root Directory* to `apps/web`. Vercel

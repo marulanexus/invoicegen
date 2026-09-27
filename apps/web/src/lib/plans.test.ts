@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getPlan, isUnlimited, PLAN_ORDER, PLANS } from "./plans";
+import { getPlan, isUnlimited, PLAN_ORDER, PLANS, zarPrice } from "./plans";
 
 describe("getPlan", () => {
   it("returns the matching plan for a known id", () => {
@@ -46,5 +46,21 @@ describe("paid plan limits", () => {
 describe("PLAN_ORDER", () => {
   it("lists tiers from cheapest to most capable", () => {
     expect(PLAN_ORDER).toEqual(["free", "growth", "business"]);
+  });
+});
+
+describe("zarPrice", () => {
+  it("charges R149 / R299 a month", () => {
+    expect(zarPrice("growth", "monthly")).toBe(149);
+    expect(zarPrice("business", "monthly")).toBe(299);
+  });
+
+  it("gives two months free on yearly billing", () => {
+    expect(zarPrice("growth", "yearly")).toBe(149 * 10);
+    expect(zarPrice("business", "yearly")).toBe(299 * 10);
+  });
+
+  it("has nothing to charge on the free plan", () => {
+    expect(zarPrice("free", "monthly")).toBeNull();
   });
 });

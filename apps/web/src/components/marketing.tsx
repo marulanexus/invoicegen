@@ -93,10 +93,15 @@ export function PricingCards({ ctaHref = "/sign-up" }: { ctaHref?: string }) {
             <p className="mt-1 text-sm text-muted-foreground">{plan.tagline}</p>
             <div className="mt-4 flex items-baseline gap-1">
               <span className="text-4xl font-bold tracking-tight">
-                ${plan.priceMonthly}
+                R{plan.zar.monthly}
               </span>
               <span className="text-sm text-muted-foreground">/month</span>
             </div>
+            {plan.zar.yearly > 0 && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                or R{plan.zar.yearly.toLocaleString("en-ZA")}/year (2 months free)
+              </p>
+            )}
             <ul className="mt-6 flex-1 space-y-3 text-sm">
               {plan.highlights.map((h) => (
                 <li key={h} className="flex items-start gap-2">
@@ -111,7 +116,7 @@ export function PricingCards({ ctaHref = "/sign-up" }: { ctaHref?: string }) {
               variant={featured ? "default" : "outline"}
             >
               <Link href={ctaHref}>
-                {plan.priceMonthly === 0 ? "Start free" : `Choose ${plan.name}`}
+                {plan.zar.monthly === 0 ? "Start free" : `Choose ${plan.name}`}
               </Link>
             </Button>
           </div>
