@@ -73,6 +73,8 @@ export const paymentMethodEnum = pgEnum("payment_method", [
 /** Online payment providers a business can connect to take invoice payments. */
 export const gatewayProviderEnum = pgEnum("gateway_provider", ["payfast", "yoco"]);
 
+export const proofStatusEnum = pgEnum("proof_status", ["pending", "accepted", "rejected"]);
+
 export const checkoutStatusEnum = pgEnum("checkout_status", [
   "pending",
   "completed",
@@ -650,6 +652,42 @@ export const pushDevices = pgTable(
   (t) => [uniqueIndex("push_devices_token_idx").on(t.token), index("push_devices_org_idx").on(t.orgId)]
 );
 
+/* ─────────────────────────── Proof of payment ─────────────────────────── */
+
+/**
+ * A payer's proof of payment (EFT screenshot/PDF) uploaded on the public
+ * invoice link. The file lives in the private R2 bucket (`fileKey`); the
+ * owner accepts it (recording a payment) or rejects it.
+ */
+export const paymentProofs = pgTable(
+  "payment_proofs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    documentId: uuid("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
+    fileKey: text("file_key").notNull(),
+    fileName: text("file_name").notNull(),
+    contentType: text("content_type").notNull(),
+    size: integer("size").notNull(),
+    /** What the payer says they paid (optional; the owner confirms). */
+    amount: numeric("amount", { precision: 14, scale: 2 }),
+    paidOn: date("paid_on"),
+    reference: text("reference"),
+    note: text("note"),
+    status: proofStatusEnum("status").notNull().default("pending"),
+    rejectionReason: text("rejection_reason"),
+    paymentId: uuid("payment_id").references(() => payments.id, { onDelete: "set null" }),
+    reviewedByMemberId: uuid("reviewed_by_member_id").references(() => members.id, { onDelete: "set null" }),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("payment_proofs_document_idx").on(t.documentId)]
+);
+
 /* ─────────────────────────────── Relations ───────────────────────────── */
 
 export const organizationsRelations = relations(organizations, ({ many, one }) => ({
@@ -729,3 +767,4 @@ export type CalendarEvent = typeof calendarEvents.$inferSelect;
 export type PaymentGateway = typeof paymentGateways.$inferSelect;
 export type PaymentCheckout = typeof paymentCheckouts.$inferSelect;
 export type PushDevice = typeof pushDevices.$inferSelect;
+export type PaymentProof = typeof paymentProofs.$inferSelect;

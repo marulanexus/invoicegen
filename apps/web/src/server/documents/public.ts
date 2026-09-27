@@ -9,6 +9,7 @@ import { PAYFAST_MIN_AMOUNT } from "@/server/gateways/checkout";
 import { enabledProviders, type Provider } from "@/server/gateways/store";
 import { notifyDocumentViewed } from "@/server/notifications/events";
 import { getPlan } from "@/lib/plans";
+import { isPrivateStorageConfigured } from "@/lib/env";
 import { viewFromStored, type DocumentView } from "@/lib/document-view";
 
 export interface PublicDocument {
@@ -17,6 +18,8 @@ export interface PublicDocument {
   type: Document["type"];
   /** Online payment options, when this invoice can be paid now. */
   payment: { providers: Provider[]; balance: number; currency: string } | null;
+  /** Payer may upload proof of payment (EFT) for this invoice. */
+  proofUpload: { balance: number; currency: string } | null;
 }
 
 /** Which "Pay now" buttons to show: ZAR invoices with a balance, per connected gateway. */
@@ -85,6 +88,10 @@ export async function getPublicDocument(
     number: doc.number,
     type: doc.type,
     payment: await paymentOptions(doc),
+    proofUpload:
+      isPrivateStorageConfigured && doc.type === "invoice" && doc.status !== "draft" && balanceOf(doc) > 0
+        ? { balance: balanceOf(doc), currency: doc.currency }
+        : null,
   };
 }
 

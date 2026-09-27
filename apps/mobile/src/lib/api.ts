@@ -107,6 +107,11 @@ export function useApi() {
       call<{ registered: true }>('POST', '/devices', input),
     unregisterDevice: (token: string) => call<{ removed: boolean }>('DELETE', '/devices', { token }),
 
+    proofFileUrl: (id: string) => call<{ url: string }>('GET', `/proofs/${id}/file`),
+    acceptProof: (id: string, input: { amount: number; paidAt: string; reference?: string }) =>
+      call<unknown>('POST', `/proofs/${id}/accept`, input),
+    rejectProof: (id: string, reason: string) => call<unknown>('POST', `/proofs/${id}/reject`, { reason }),
+
     payments: (limit = 50) => call<PaymentListItem[]>('GET', `/payments${query({ limit })}`),
     recordPayment: (input: PaymentInput) =>
       call<{ payment: Payment; document: Document }>('POST', '/payments', input),

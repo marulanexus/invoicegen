@@ -18,6 +18,8 @@ import { getDocument } from "@/server/documents/queries";
 import { asIssued, getTaxInvoiceStatus } from "@/server/documents/tax-invoice";
 import { TaxInvoiceChecklist } from "@/components/documents/tax-invoice-checklist";
 import { NoteDialog } from "@/components/documents/note-dialog";
+import { ProofReview } from "@/components/documents/proof-review";
+import { listProofs } from "@/server/proofs/service";
 import { isLockedTaxInvoice, isNote } from "@/server/documents/rules";
 import { viewFromStored } from "@/lib/document-view";
 import { formatCurrency } from "@/lib/money";
@@ -37,6 +39,7 @@ export default async function DocumentDetailPage({
   // Drafts preview with the details they'd be issued with today.
   const doc = await asIssued(ctx, full.document);
   const taxStatus = doc.status === "draft" ? await getTaxInvoiceStatus(ctx, doc, items) : null;
+  const proofs = doc.type === "invoice" ? await listProofs(ctx.org.id, doc.id) : [];
   const view = viewFromStored(doc, items, {
     related: full.related,
     showPoweredBy: !ctx.plan.features.customBranding,
@@ -174,6 +177,8 @@ export default async function DocumentDetailPage({
               <CopyLink id={doc.id} isDraft={doc.status === "draft"} />
             </div>
           )}
+
+          <ProofReview documentId={doc.id} proofs={proofs} balance={balance} currency={doc.currency} />
 
           {(canIssueNotes || full.notes.length > 0) && (
             <Card>

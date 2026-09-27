@@ -1,4 +1,5 @@
-import type { FullDocument, StatusAction } from '@invoicegen/shared/api';
+import type { FullDocument, PaymentProof, StatusAction } from '@invoicegen/shared/api';
+import * as WebBrowser from 'expo-web-browser';
 import { shareMessage } from '@invoicegen/shared/whatsapp';
 import * as Sharing from 'expo-sharing';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
@@ -9,8 +10,8 @@ import { Badge, Button, Card, ErrorView, KeyValue, List, Loading, Row, Screen, S
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { ApiError, useApi } from '@/lib/api';
-import { balanceOf, formatCurrency, formatDate, PAYMENT_METHOD, STATUS } from '@/lib/format';
-import { useChangeStatus, useConvertQuote, useDocument, useMe, useSendDocument } from '@/lib/queries';
+import { balanceOf, formatCurrency, formatDate, PAYMENT_METHOD, STATUS, todayIso } from '@/lib/format';
+import { useChangeStatus, useConvertQuote, useDocument, useMe, useReviewProof, useSendDocument } from '@/lib/queries';
 import { sendViaWhatsApp } from '@/lib/share';
 
 function errorMessage(err: unknown): string {
@@ -42,6 +43,7 @@ export default function DocumentScreen() {
   const changeStatus = useChangeStatus(id);
   const send = useSendDocument(id);
   const convert = useConvertQuote(id);
+  const reviewProof = useReviewProof(id);
   const [busy, setBusy] = useState<'whatsapp' | 'pdf' | null>(null);
 
   if (doc.isPending) return <Loading />;
@@ -53,7 +55,7 @@ export default function DocumentScreen() {
     );
   }
 
-  const { document: d, client, items, payments, taxInvoice, related, notes } = doc.data;
+  const { document: d, client, items, payments, taxInvoice, related, notes, proofs } = doc.data;
   const isNote = d.type === 'credit_note' || d.type === 'debit_note';
   const adjustment = Number(d.adjustmentTotal);
   const canIssueNotes = d.type === 'invoice' && d.status !== 'draft' && d.status !== 'void';
@@ -83,6 +85,47 @@ export default function DocumentScreen() {
     } finally {
       setBusy(null);
     }
+  }
+
+  async function viewProof(proofId: string) {
+    try {
+      const { url } = await api.proofFileUrl(proofId);
+      await WebBrowser.openBrowserAsync(url);
+    } catch (err) {
+      Alert.alert("Couldn't open the proof", errorMessage(err));
+    }
+  }
+
+  function acceptProof(p: PaymentProof) {
+    const owed = balanceOf(doc.data!.document);
+    const amount = p.amount ? Math.min(Number(p.amount), owed) : owed;
+    const paidAt = p.paidOn ?? todayIso();
+    Alert.alert(
+      `Record ${formatCurrency(amount, doc.data!.document.currency)}?`,
+      `Paid ${formatDate(paidAt)} by EFT${p.reference ? `, ref ${p.reference}` : ''}. Check it's in your bank account first.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Record payment',
+          onPress: () =>
+            reviewProof.mutate(
+              { id: p.id, action: 'accept', amount, paidAt, reference: p.reference ?? undefined },
+              { onError: (err) => Alert.alert("Couldn't record it", errorMessage(err)) }
+            ),
+        },
+      ]
+    );
+  }
+
+  function rejectProof(p: PaymentProof) {
+    const reject = (reason: string) =>
+      reviewProof.mutate({ id: p.id, action: 'reject', reason }, { onError: (err) => Alert.alert("Couldn't reject it", errorMessage(err)) });
+    // Android alerts can't take typed input: offer the common reasons.
+    Alert.alert('Reject this proof?', undefined, [
+      { text: "Money hasn't arrived", onPress: () => reject("Money hasn't arrived") },
+      { text: 'Wrong invoice or amount', onPress: () => reject('Wrong invoice or amount') },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
   }
 
   async function sharePdf() {
@@ -235,6 +278,37 @@ export default function DocumentScreen() {
             </View>
           </Card>
         </Section>
+
+        {proofs.length > 0 ? (
+          <Section title="Proof of payment">
+            {proofs.map((p) => (
+              <Card key={p.id}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <T variant="heading">{p.amount ? money(p.amount) : 'Amount not given'}</T>
+                  <Badge
+                    label={p.status === 'pending' ? 'To check' : p.status === 'accepted' ? 'Accepted' : 'Rejected'}
+                    tone={p.status === 'pending' ? 'warning' : p.status === 'accepted' ? 'success' : 'neutral'}
+                  />
+                </View>
+                <T variant="small" muted>
+                  {[p.paidOn ? `Paid ${formatDate(p.paidOn)}` : null, p.reference ? `Ref ${p.reference}` : null, `Sent ${formatDate(p.createdAt)}`]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </T>
+                {p.status === 'rejected' && p.rejectionReason ? <T variant="small" muted>Rejected: {p.rejectionReason}</T> : null}
+                <View style={{ flexDirection: 'row', gap: Spacing.two }}>
+                  <Button label="View" variant="secondary" style={{ flex: 1 }} onPress={() => viewProof(p.id)} />
+                  {p.status === 'pending' ? (
+                    <>
+                      <Button label="Accept" style={{ flex: 1 }} onPress={() => acceptProof(p)} disabled={reviewProof.isPending || balance <= 0} />
+                      <Button label="Reject" variant="ghost" style={{ flex: 1 }} onPress={() => rejectProof(p)} disabled={reviewProof.isPending} />
+                    </>
+                  ) : null}
+                </View>
+              </Card>
+            ))}
+          </Section>
+        ) : null}
 
         {canIssueNotes ? (
           <Section title="Credit & debit notes">

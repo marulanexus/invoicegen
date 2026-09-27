@@ -191,6 +191,25 @@ export interface FullDocument {
   related: { id: string; number: string; type: DocumentType; issueDate: string | null } | null;
   /** Invoices: credit/debit notes issued against it, oldest first. */
   notes: Document[];
+  /** Invoices: proofs of payment uploaded by the payer, newest first. */
+  proofs: PaymentProof[];
+}
+
+export interface PaymentProof {
+  id: string;
+  documentId: string;
+  fileName: string;
+  contentType: string;
+  size: number;
+  /** What the payer says they paid, if given. */
+  amount: string | null;
+  paidOn: string | null;
+  reference: string | null;
+  note: string | null;
+  status: "pending" | "accepted" | "rejected";
+  rejectionReason: string | null;
+  paymentId: string | null;
+  createdAt: string;
 }
 
 /** Body for POST /documents/:id/notes. Amounts include VAT. */

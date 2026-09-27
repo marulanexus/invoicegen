@@ -112,6 +112,19 @@ export function useIssueNote(invoiceId: string) {
   });
 }
 
+/** Accept (records a payment) or reject a payer's proof of payment. */
+export function useReviewProof(documentId: string) {
+  const api = useApi();
+  const invalidate = useInvalidateMoney();
+  return useMutation({
+    mutationFn: (input: { id: string } & ({ action: 'accept'; amount: number; paidAt: string; reference?: string } | { action: 'reject'; reason: string })) =>
+      input.action === 'accept'
+        ? api.acceptProof(input.id, { amount: input.amount, paidAt: input.paidAt, reference: input.reference })
+        : api.rejectProof(input.id, input.reason),
+    onSuccess: () => invalidate(documentId),
+  });
+}
+
 export function useRecordPayment(documentId: string) {
   const api = useApi();
   const invalidate = useInvalidateMoney();

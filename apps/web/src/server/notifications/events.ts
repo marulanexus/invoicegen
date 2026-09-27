@@ -64,3 +64,14 @@ export function notifyOverdue(
         }
   );
 }
+
+export function notifyProofReceived(
+  orgId: string,
+  p: { documentId: string; number: string; amount: string | null; clientName?: string | null }
+): void {
+  dispatch(orgId, {
+    title: `Proof of payment for ${p.number}`,
+    body: `${p.clientName ?? "Your client"} uploaded proof of payment${p.amount ? ` for ${p.amount}` : ""}. Check it and record the payment.`,
+    data: { documentId: p.documentId, kind: "proof" },
+  });
+}

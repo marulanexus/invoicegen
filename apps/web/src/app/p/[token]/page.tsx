@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { DocumentPreview } from "@/components/documents/document-preview";
 import { PayNow } from "@/components/documents/pay-now";
+import { ProofUpload } from "@/components/documents/proof-upload";
 import {
   getPublicDocument,
   markViewedByToken,
@@ -79,6 +80,9 @@ export default async function PublicDocumentPage({
             balance={doc.payment.balance}
             currency={doc.payment.currency}
           />
+        )}
+        {doc.proofUpload && (
+          <ProofUpload token={token} balance={doc.proofUpload.balance} currency={doc.proofUpload.currency} />
         )}
         <DocumentPreview view={doc.view} />
         <p className="mt-6 text-center text-xs text-muted-foreground">
