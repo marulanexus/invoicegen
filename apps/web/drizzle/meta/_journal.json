@@ -36,6 +36,13 @@
       "when": 1790466364447,
       "tag": "0004_online_payments",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790468390656,
+      "tag": "0005_push_devices",
+      "breakpoints": true
     }
   ]
 }

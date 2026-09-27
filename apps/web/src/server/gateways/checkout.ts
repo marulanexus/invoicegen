@@ -10,6 +10,7 @@ import {
   type PaymentCheckout,
 } from "@/server/db/schema";
 import { logActivity } from "@/server/activity";
+import { notifyOnlinePayment } from "@/server/notifications/events";
 import { fail, ok, type ServiceResult } from "@/server/service-result";
 import { balanceOf, statusForAmountPaid } from "@/server/payments/rules";
 import { buildPayfastForm, type PayfastMode } from "@/server/gateways/payfast";
@@ -191,7 +192,7 @@ export async function completeCheckout(
       })
       .where(eq(paymentCheckouts.id, locked.id));
 
-    return { doc, overpaid: newPaid > toNumber(doc.total) + 0.005 };
+    return { doc, fullyPaid: next.fullyPaid, overpaid: newPaid > toNumber(doc.total) + 0.005 };
   });
 
   if (!result) return "already_completed";
@@ -202,6 +203,16 @@ export async function completeCheckout(
     entityType: "document",
     entityId: result.doc.id,
     description: `${formatCurrency(input.amount, checkout.currency)} paid online via ${PROVIDER_LABEL[checkout.provider]} on ${result.doc.number}${result.overpaid ? " (overpaid — check and refund if needed)" : ""}`,
+  });
+
+  notifyOnlinePayment(checkout.orgId, {
+    documentId: result.doc.id,
+    number: result.doc.number,
+    amount: input.amount,
+    currency: checkout.currency,
+    provider: checkout.provider,
+    clientName: typeof result.doc.billToSnapshot?.name === "string" ? (result.doc.billToSnapshot.name as string) : null,
+    fullyPaid: result.fullyPaid,
   });
   return "completed";
 }

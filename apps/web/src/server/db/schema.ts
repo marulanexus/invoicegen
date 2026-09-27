@@ -601,6 +601,30 @@ export const paymentCheckouts = pgTable(
   ]
 );
 
+/* ──────────────────────────── Push devices ──────────────────────────── */
+
+/**
+ * A signed-in phone that receives push notifications (Expo push token). A
+ * token belongs to one member at a time; re-registering moves it.
+ */
+export const pushDevices = pgTable(
+  "push_devices",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    memberId: uuid("member_id")
+      .notNull()
+      .references(() => members.id, { onDelete: "cascade" }),
+    token: text("token").notNull(),
+    platform: text("platform").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("push_devices_token_idx").on(t.token), index("push_devices_org_idx").on(t.orgId)]
+);
+
 /* ─────────────────────────────── Relations ───────────────────────────── */
 
 export const organizationsRelations = relations(organizations, ({ many, one }) => ({
@@ -679,3 +703,4 @@ export type ActivityLog = typeof activityLogs.$inferSelect;
 export type CalendarEvent = typeof calendarEvents.$inferSelect;
 export type PaymentGateway = typeof paymentGateways.$inferSelect;
 export type PaymentCheckout = typeof paymentCheckouts.$inferSelect;
+export type PushDevice = typeof pushDevices.$inferSelect;

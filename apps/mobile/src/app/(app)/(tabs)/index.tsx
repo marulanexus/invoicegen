@@ -1,4 +1,3 @@
-import { useAuth } from '@clerk/expo';
 import { router } from 'expo-router';
 import { Alert, View } from 'react-native';
 
@@ -7,7 +6,7 @@ import { Badge, Button, Card, Empty, ErrorView, List, Loading, Row, Screen, Sect
 import { Spacing } from '@/constants/theme';
 import { formatCurrency, formatDate, STATUS } from '@/lib/format';
 import { useDashboard, useMe } from '@/lib/queries';
-import { queryClient } from '@/lib/query-client';
+import { useSignOut } from '@/lib/session';
 
 function Metric({ label, value, tone }: { label: string; value: string; tone?: 'danger' | 'success' }) {
   return (
@@ -23,7 +22,7 @@ function Metric({ label, value, tone }: { label: string; value: string; tone?: '
 }
 
 export default function HomeScreen() {
-  const { signOut } = useAuth();
+  const signOut = useSignOut();
   const me = useMe();
   const dash = useDashboard();
   const currency = dash.data?.currency ?? me.data?.business?.defaultCurrency ?? 'ZAR';
@@ -35,10 +34,7 @@ export default function HomeScreen() {
       {
         text: 'Sign out',
         style: 'destructive',
-        onPress: () => {
-          queryClient.clear();
-          signOut();
-        },
+        onPress: () => void signOut(),
       },
     ]);
   }

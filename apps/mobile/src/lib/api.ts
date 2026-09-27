@@ -1,5 +1,5 @@
 import { useAuth } from '@clerk/expo';
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { Directory, File, Paths } from 'expo-file-system';
 import type {
   ApiErrorBody,
@@ -77,7 +77,7 @@ export function useApi() {
     [getToken]
   );
 
-  return {
+  return useMemo(() => ({
     me: () => call<Me>('GET', '/me'),
     dashboard: () => call<Dashboard>('GET', '/dashboard'),
 
@@ -100,6 +100,10 @@ export function useApi() {
     shareLink: (id: string) => call<{ url: string }>('POST', `/documents/${id}/share`),
     convertQuote: (id: string) => call<Document>('POST', `/documents/${id}/convert`),
 
+    registerDevice: (input: { token: string; platform: 'ios' | 'android' }) =>
+      call<{ registered: true }>('POST', '/devices', input),
+    unregisterDevice: (token: string) => call<{ removed: boolean }>('DELETE', '/devices', { token }),
+
     payments: (limit = 50) => call<PaymentListItem[]>('GET', `/payments${query({ limit })}`),
     recordPayment: (input: PaymentInput) =>
       call<{ payment: Payment; document: Document }>('POST', '/payments', input),
@@ -120,7 +124,7 @@ export function useApi() {
         throw new ApiError("Couldn't download the PDF. Check your connection.", 0, 'network');
       }
     },
-  };
+  }), [call, getToken]);
 }
 
 export type Api = ReturnType<typeof useApi>;

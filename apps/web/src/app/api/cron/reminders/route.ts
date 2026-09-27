@@ -10,6 +10,8 @@ import {
 } from "@/server/db/schema";
 import { getPlan } from "@/lib/plans";
 import { env } from "@/lib/env";
+import { balanceDue } from "@/lib/calc";
+import { notifyOverdue } from "@/server/notifications/events";
 
 export const runtime = "nodejs";
 
@@ -55,7 +57,31 @@ export async function GET(req: Request) {
         lt(documents.dueDate, today)
       )
     )
-    .returning({ id: documents.id });
+    .returning({
+      id: documents.id,
+      orgId: documents.orgId,
+      number: documents.number,
+      total: documents.total,
+      amountPaid: documents.amountPaid,
+      currency: documents.currency,
+      billTo: documents.billToSnapshot,
+    });
+
+  // Tell each business about invoices that just became overdue (one push per org).
+  const overdueByOrg = new Map<string, typeof overdue>();
+  for (const inv of overdue) overdueByOrg.set(inv.orgId, [...(overdueByOrg.get(inv.orgId) ?? []), inv]);
+  for (const [orgId, invoices] of overdueByOrg) {
+    notifyOverdue(
+      orgId,
+      invoices.map((i) => ({
+        documentId: i.id,
+        number: i.number,
+        balance: balanceDue(i.total, i.amountPaid),
+        currency: i.currency,
+        clientName: typeof i.billTo?.name === "string" ? (i.billTo.name as string) : null,
+      }))
+    );
+  }
 
   // 2. Reminder pass (only for orgs that enabled it + have the plan feature).
   const settings = await db

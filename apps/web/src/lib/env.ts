@@ -43,6 +43,10 @@ export const env = {
   GOOGLE_CLIENT_ID: get("GOOGLE_CLIENT_ID"),
   GOOGLE_CLIENT_SECRET: get("GOOGLE_CLIENT_SECRET"),
 
+  // Expo push service. Optional: only needed when "enhanced push security"
+  // is enabled for the project in the EAS dashboard.
+  EXPO_ACCESS_TOKEN: get("EXPO_ACCESS_TOKEN"),
+
   // Cron / scheduled jobs
   CRON_SECRET: get("CRON_SECRET"),
 

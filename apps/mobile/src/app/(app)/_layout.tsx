@@ -1,4 +1,3 @@
-import { useAuth } from '@clerk/expo';
 import { Stack } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { View } from 'react-native';
@@ -10,11 +9,12 @@ import { useTheme } from '@/hooks/use-theme';
 import { API_URL } from '@/lib/config';
 import { useMe } from '@/lib/queries';
 import { queryClient } from '@/lib/query-client';
+import { usePushNotifications, useSignOut } from '@/lib/session';
 
 /** Business setup (name, tax, numbering) lives on the web for now. */
 function FinishSetup() {
   const theme = useTheme();
-  const { signOut } = useAuth();
+  const signOut = useSignOut();
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
       <View style={{ flex: 1, padding: Spacing.four, justifyContent: 'center', gap: Spacing.three }}>
@@ -25,7 +25,7 @@ function FinishSetup() {
         </T>
         <Button label="Open setup on the web" onPress={() => WebBrowser.openBrowserAsync(`${API_URL}/onboarding`)} />
         <Button label="I've finished, check again" variant="secondary" onPress={() => queryClient.invalidateQueries({ queryKey: ['me'] })} />
-        <Button label="Sign out" variant="ghost" onPress={() => { queryClient.clear(); signOut(); }} />
+        <Button label="Sign out" variant="ghost" onPress={signOut} />
       </View>
     </SafeAreaView>
   );
@@ -33,6 +33,7 @@ function FinishSetup() {
 
 export default function AppLayout() {
   const me = useMe();
+  usePushNotifications(Boolean(me.data?.onboardingCompleted));
 
   if (me.isPending) return <Loading />;
   if (me.isError) {

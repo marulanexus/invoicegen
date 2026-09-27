@@ -7,6 +7,7 @@ import { clients, documents, lineItems, organizations, type Document } from "@/s
 import { balanceOf } from "@/server/payments/rules";
 import { PAYFAST_MIN_AMOUNT } from "@/server/gateways/checkout";
 import { enabledProviders, type Provider } from "@/server/gateways/store";
+import { notifyDocumentViewed } from "@/server/notifications/events";
 import { getPlan } from "@/lib/plans";
 import { viewFromStored, type DocumentView } from "@/lib/document-view";
 
@@ -79,10 +80,19 @@ export async function getPublicDocument(
 /** Mark a sent document as viewed the first time its public link is opened. */
 export async function markViewedByToken(token: string): Promise<void> {
   try {
-    await db
+    const flipped = await db
       .update(documents)
       .set({ status: "viewed", viewedAt: new Date(), updatedAt: new Date() })
-      .where(and(eq(documents.publicToken, token), eq(documents.status, "sent")));
+      .where(and(eq(documents.publicToken, token), eq(documents.status, "sent")))
+      .returning({ id: documents.id, orgId: documents.orgId, number: documents.number, billTo: documents.billToSnapshot });
+    // Only the first open flips sent → viewed, so the owner hears about it once.
+    for (const d of flipped) {
+      notifyDocumentViewed(d.orgId, {
+        documentId: d.id,
+        number: d.number,
+        clientName: typeof d.billTo?.name === "string" ? (d.billTo.name as string) : null,
+      });
+    }
   } catch (err) {
     console.error("[public] markViewed failed", err);
   }
