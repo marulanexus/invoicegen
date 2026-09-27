@@ -12,6 +12,7 @@ import { DocumentDetailActions } from "@/components/documents/document-detail-ac
 import { RecordPaymentDialog } from "@/components/payments/record-payment-dialog";
 import { RecurringDialog } from "@/components/documents/recurring-dialog";
 import { CopyLink } from "@/components/documents/copy-link";
+import { WhatsAppShare } from "@/components/documents/whatsapp-share";
 import { requireOrgContext } from "@/server/auth/context";
 import { getDocument } from "@/server/documents/queries";
 import { asIssued, getTaxInvoiceStatus } from "@/server/documents/tax-invoice";
@@ -155,7 +156,24 @@ export default async function DocumentDetailPage({
             </CardContent>
           </Card>
 
-          {doc.status !== "void" && <CopyLink id={doc.id} isDraft={doc.status === "draft"} />}
+          {doc.status !== "void" && (
+            <div className="space-y-2">
+              <WhatsAppShare
+                id={doc.id}
+                isDraft={doc.status === "draft"}
+                phone={client?.phone}
+                message={{
+                  type: doc.type,
+                  number: doc.number,
+                  total: formatCurrency(doc.total, doc.currency),
+                  businessName: ctx.profile?.displayName ?? ctx.org.name,
+                  clientName: client?.name ?? (typeof doc.billToSnapshot?.name === "string" ? doc.billToSnapshot.name : null),
+                  dueDate: doc.dueDate ? formatDate(doc.dueDate) : null,
+                }}
+              />
+              <CopyLink id={doc.id} isDraft={doc.status === "draft"} />
+            </div>
+          )}
 
           {(canIssueNotes || full.notes.length > 0) && (
             <Card>

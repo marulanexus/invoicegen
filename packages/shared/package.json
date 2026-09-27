@@ -8,7 +8,8 @@
     "./money": "./src/money.ts",
     "./calc": "./src/calc.ts",
     "./api": "./src/api.ts",
-    "./tax-invoice": "./src/tax-invoice.ts"
+    "./tax-invoice": "./src/tax-invoice.ts",
+    "./whatsapp": "./src/whatsapp.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

@@ -1,4 +1,5 @@
 import type { FullDocument, StatusAction } from '@invoicegen/shared/api';
+import { shareMessage } from '@invoicegen/shared/whatsapp';
 import * as Sharing from 'expo-sharing';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
@@ -10,9 +11,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { ApiError, useApi } from '@/lib/api';
 import { balanceOf, formatCurrency, formatDate, PAYMENT_METHOD, STATUS } from '@/lib/format';
 import { useChangeStatus, useConvertQuote, useDocument, useMe, useSendDocument } from '@/lib/queries';
-import { shareMessage } from '@/lib/share';
-
-const TYPE_LABEL = { invoice: 'Invoice', quote: 'Quote', receipt: 'Receipt', credit_note: 'Credit note', debit_note: 'Debit note' } as const;
+import { sendViaWhatsApp } from '@/lib/share';
 
 function errorMessage(err: unknown): string {
   return err instanceof ApiError ? err.message : 'Something went wrong. Please try again.';
@@ -68,12 +67,16 @@ export default function DocumentScreen() {
     setBusy('whatsapp');
     try {
       const { url } = await api.shareLink(id);
-      const lines = [
-        `Hi${client?.name ? ` ${client.name}` : ''},`,
-        `here is ${TYPE_LABEL[d.type].toLowerCase()} ${d.number}${business ? ` from ${business}` : ''} for ${money(d.total)}${d.dueDate && d.type === 'invoice' ? `, due ${formatDate(d.dueDate)}` : ''}.`,
-        d.type === 'invoice' ? `View and pay here: ${url}` : `View it here: ${url}`,
-      ];
-      await shareMessage(lines.join('\n'), client?.phone);
+      const message = shareMessage({
+        type: d.type,
+        number: d.number,
+        total: money(d.total),
+        url,
+        businessName: business,
+        clientName: client?.name,
+        dueDate: d.dueDate ? formatDate(d.dueDate) : null,
+      });
+      await sendViaWhatsApp(message, client?.phone);
       doc.refetch();
     } catch (err) {
       Alert.alert("Couldn't share", errorMessage(err));

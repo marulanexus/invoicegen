@@ -78,13 +78,13 @@ function editableColumns(d: DocumentInput) {
     issueDate: d.issueDate,
     dueDate: d.dueDate || null,
     validUntil: d.validUntil || null,
-    poNumber: d.poNumber,
+    poNumber: d.poNumber ?? null,
     templateKey: d.templateKey,
     accentColor: d.accentColor,
     taxLabel: d.taxLabel,
     taxInclusive: d.taxInclusive,
-    notes: d.notes,
-    terms: d.terms,
+    notes: d.notes ?? null,
+    terms: d.terms ?? null,
     ...totalsColumns(d),
   };
 }
