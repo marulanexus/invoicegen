@@ -3,7 +3,10 @@ import "server-only";
 import { and, eq } from "drizzle-orm";
 
 import { db } from "@/server/db";
-import { clients, documents, lineItems, organizations } from "@/server/db/schema";
+import { clients, documents, lineItems, organizations, type Document } from "@/server/db/schema";
+import { balanceOf } from "@/server/payments/rules";
+import { PAYFAST_MIN_AMOUNT } from "@/server/gateways/checkout";
+import { enabledProviders, type Provider } from "@/server/gateways/store";
 import { getPlan } from "@/lib/plans";
 import { viewFromStored, type DocumentView } from "@/lib/document-view";
 
@@ -11,6 +14,19 @@ export interface PublicDocument {
   view: DocumentView;
   number: string;
   type: "invoice" | "quote" | "receipt";
+  /** Online payment options, when this invoice can be paid now. */
+  payment: { providers: Provider[]; balance: number; currency: string } | null;
+}
+
+/** Which "Pay now" buttons to show: ZAR invoices with a balance, per connected gateway. */
+async function paymentOptions(doc: Document): Promise<PublicDocument["payment"]> {
+  if (doc.type !== "invoice" || doc.currency !== "ZAR") return null;
+  const balance = balanceOf(doc);
+  if (balance <= 0) return null;
+  const providers = (await enabledProviders(doc.orgId)).filter(
+    (p) => p !== "payfast" || balance >= PAYFAST_MIN_AMOUNT
+  );
+  return providers.length ? { providers, balance, currency: doc.currency } : null;
 }
 
 /** Look up a document by its public share token (no auth / org scope). */
@@ -56,6 +72,7 @@ export async function getPublicDocument(
     view: viewFromStored(doc, items, { showPoweredBy }),
     number: doc.number,
     type: doc.type,
+    payment: await paymentOptions(doc),
   };
 }
 

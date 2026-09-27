@@ -18,6 +18,7 @@ import {
   pgTable,
   text,
   timestamp,
+  index,
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
@@ -60,6 +61,17 @@ export const paymentMethodEnum = pgEnum("payment_method", [
   "paypal",
   "stripe",
   "other",
+  "payfast",
+  "yoco",
+]);
+
+/** Online payment providers a business can connect to take invoice payments. */
+export const gatewayProviderEnum = pgEnum("gateway_provider", ["payfast", "yoco"]);
+
+export const checkoutStatusEnum = pgEnum("checkout_status", [
+  "pending",
+  "completed",
+  "failed",
 ]);
 
 export const subscriptionStatusEnum = pgEnum("subscription_status", [
@@ -525,6 +537,70 @@ export const calendarEvents = pgTable("calendar_events", {
     .defaultNow(),
 });
 
+/* ─────────────────────────── Online payments ─────────────────────────── */
+
+/**
+ * A business's own merchant account with a payment provider. Invoice payments
+ * go straight to the business, never through InvoiceGen. Secrets are stored
+ * encrypted (`src/lib/crypto.ts`) as a JSON blob; see server/gateways/store.ts.
+ */
+export const paymentGateways = pgTable(
+  "payment_gateways",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    provider: gatewayProviderEnum("provider").notNull(),
+    /** "test" (PayFast sandbox / Yoco test keys) or "live". */
+    mode: text("mode").notNull().default("test"),
+    enabled: boolean("enabled").notNull().default(true),
+    /** PayFast merchant ID (not secret; shown in settings). */
+    merchantId: text("merchant_id"),
+    secretsEnc: text("secrets_enc").notNull(),
+    /** Yoco webhook registered on the business's account for this gateway. */
+    webhookId: text("webhook_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("payment_gateways_org_provider_idx").on(t.orgId, t.provider)]
+);
+
+/**
+ * One "Pay now" attempt. Created before redirecting the payer to the provider;
+ * completed exactly once by a verified provider notification, which records
+ * the payment. Its id is the reference sent to the provider.
+ */
+export const paymentCheckouts = pgTable(
+  "payment_checkouts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    documentId: uuid("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
+    gatewayId: uuid("gateway_id").references(() => paymentGateways.id, { onDelete: "set null" }),
+    provider: gatewayProviderEnum("provider").notNull(),
+    mode: text("mode").notNull(),
+    amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
+    currency: text("currency").notNull(),
+    status: checkoutStatusEnum("status").notNull().default("pending"),
+    /** Provider's id for the checkout (Yoco checkout id). */
+    providerReference: text("provider_reference"),
+    /** Provider's id for the completed payment (PayFast pf_payment_id, Yoco payment id). */
+    providerPaymentId: text("provider_payment_id"),
+    paymentId: uuid("payment_id").references(() => payments.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+  },
+  (t) => [
+    index("payment_checkouts_document_idx").on(t.documentId),
+    index("payment_checkouts_provider_ref_idx").on(t.provider, t.providerReference),
+  ]
+);
+
 /* ─────────────────────────────── Relations ───────────────────────────── */
 
 export const organizationsRelations = relations(organizations, ({ many, one }) => ({
@@ -601,3 +677,5 @@ export type RecurringInvoice = typeof recurringInvoices.$inferSelect;
 export type EmailSettings = typeof emailSettings.$inferSelect;
 export type ActivityLog = typeof activityLogs.$inferSelect;
 export type CalendarEvent = typeof calendarEvents.$inferSelect;
+export type PaymentGateway = typeof paymentGateways.$inferSelect;
+export type PaymentCheckout = typeof paymentCheckouts.$inferSelect;

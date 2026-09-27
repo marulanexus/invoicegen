@@ -29,6 +29,13 @@
       "when": 1790461940896,
       "tag": "0003_drop_pdf_url",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790466364447,
+      "tag": "0004_online_payments",
+      "breakpoints": true
     }
   ]
 }
